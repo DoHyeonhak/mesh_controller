@@ -58,7 +58,7 @@ class AppController:
             return
         try:
             if '-' in text:
-                start, end = map(int, text.split('-'))
+                start, end = map(int, text.split(':'))
                 new_nodes = [str(n) for n in range(start, end + 1)]
             else:
                 new_nodes = [str(int(text))]

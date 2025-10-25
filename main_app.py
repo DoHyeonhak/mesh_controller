@@ -79,7 +79,7 @@ class App:
         # --- Node Management Frame ---
         node_input_frame = ttk.Frame(node_frame)
         node_input_frame.pack(fill="x", padx=5, pady=5)
-        ttk.Label(node_input_frame, text="Address (e.g., 45 or 45-50):").pack(side="left")
+        ttk.Label(node_input_frame, text="Address (e.g., 45 or 45:50):").pack(side="left")  # edit this point
         self.node_entry = ttk.Entry(node_input_frame)
         self.node_entry.pack(side="left", fill="x", expand=True)
         node_btn_frame = ttk.Frame(node_frame)
