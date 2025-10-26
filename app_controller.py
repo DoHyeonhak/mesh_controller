@@ -3,6 +3,7 @@ from tkinter import messagebox, filedialog
 from datetime import datetime
 import pandas as pd
 import re
+import time
 
 class AppController:
     """애플리케이션의 비즈니스 로직과 사용자 입력을 처리하는 컨트롤러"""
@@ -57,13 +58,13 @@ class AppController:
             messagebox.showerror("Error", "주소를 입력하세요.")
             return
         try:
-            if '-' in text:
+            if ':' in text:
                 start, end = map(int, text.split(':'))
                 new_nodes = [str(n) for n in range(start, end + 1)]
             else:
                 new_nodes = [str(int(text))]
         except ValueError:
-            messagebox.showerror("Error", "잘못된 숫자 형식입니다.")
+            messagebox.showerror("Error", "잘못된 숫자 형식입니다. 단일 숫자(예: 45, -1) 또는 범위(예: 45:50) 형식으로 입력하세요.")
             return
         
         added_count = self.model.add_nodes(new_nodes)
@@ -86,6 +87,7 @@ class AppController:
             self.view.update_node_listbox()
             self.view.log_message(f"[INFO] 노드 {address} 삭제됨")
 
+    # 1 : 1 or N
     def add_node_to_groups(self):
         node_idx = self.view.node_listbox.curselection()
         if len(node_idx) != 1:
@@ -99,6 +101,58 @@ class AppController:
         group_addrs = [self.view.group_listbox.get(i) for i in group_indices]
         cmd = f"set_group({node_addr},{','.join(group_addrs)})"
         self.serial.send_command(cmd)
+
+    # N : 1
+    def assign_group_membership(self):
+        """선택된 노드와 그룹의 수에 따라 그룹 멤버십을 할당합니다.
+        - 1개 노드, N개 그룹: 노드에 여러 그룹을 할당합니다. (function : add_node_to_groups 기능)
+        - N개 노드, 1개 그룹: 여러 노드를 하나의 그룹에 할당합니다.
+        """
+        node_indices = self.view.node_listbox.curselection()
+        group_indices = self.view.group_listbox.curselection()
+        num_nodes = len(node_indices)
+        num_groups = len(group_indices)
+
+        # 한 개의 노드를 여러 그룹에 할당
+        if num_nodes == 1 and num_groups >= 1:
+            node_addr = self.view.node_listbox.get(node_indices[0])
+            group_addrs = [self.view.group_listbox.get(i) for i in group_indices]
+            cmd = f"set_group({node_addr},{','.join(group_addrs)})"
+            self.serial.send_command(cmd)
+            self.view.log_message(f"[INFO] 노드 {node_addr}에 {num_groups}개의 그룹을 할당했습니다.")
+
+        # 여러 개의 노드를 한 그룹에 할당
+        elif num_nodes > 1 and num_groups == 1:
+            node_addrs = [self.view.node_listbox.get(i) for i in node_indices]
+            group_addr = self.view.group_listbox.get(group_indices[0])
+            
+            ignored_nodes = []
+            successful_nodes = []
+
+            for node_addr in node_addrs:
+                cmd = f"set_group({node_addr},{group_addr})"
+                self.serial.send_command(cmd)
+                
+                # waiting response (2 seconds)
+                wait_start_time = time.time()
+                while self.serial.is_waiting_response():
+                    time.sleep(0.05) # 50ms 간격으로 확인
+                    self.view.root.update()
+                    if time.time() - wait_start_time > 2.0:
+                        ignored_nodes.append(node_addr)
+                        break 
+                else:
+                    successful_nodes.append(node_addr)
+
+            # display the result
+            if successful_nodes:
+                self.view.log_message(f"[INFO] {len(successful_nodes)}개의 노드를 그룹 {group_addr}에 할당했습니다: {', '.join(successful_nodes)}")
+            if ignored_nodes:
+                self.view.log_message(f"[WARN] 다음 노드에 대한 응답이 없어 명령이 무시되었을 수 있습니다: {', '.join(ignored_nodes)}")
+                messagebox.showwarning("Timeout", f"다음 노드에 대한 응답이 없어 명령이 무시되었을 수 있습니다:{', '.join(ignored_nodes)}")
+
+        else:
+            messagebox.showerror("Error", "잘못된 선택입니다.\n\n- 한 개의 노드와 하나 이상의 그룹, 또는\n- 여러 개의 노드와 한 개의 그룹을 선택하세요.")
 
     def load_txt_and_set_groups(self):
         filepath = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])

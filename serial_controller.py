@@ -44,6 +44,9 @@ class SerialController:
     def is_connected(self):
         return self.ser is not None and self.ser.is_open
 
+    def is_waiting_response(self):
+        return self._waiting_response
+
     def send_command(self, command):
         if not self.is_connected():
             self.log("[ERROR] 포트가 연결되지 않았습니다.")

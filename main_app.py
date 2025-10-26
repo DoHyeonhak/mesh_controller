@@ -15,7 +15,7 @@ class App:
         self.controller = None  # Controller는 나중에 설정
 
         self.root.title("LED & Group Control with Logging")
-        self.root.geometry("760x800")
+        self.root.geometry("970x900")
 
         self._create_widgets()
         self._populate_initial_data()
@@ -90,21 +90,23 @@ class App:
         self.delete_node_button.pack(side="left", expand=True, fill="x")
         list_frame_node = ttk.Frame(node_frame)
         list_frame_node.pack(fill="both", expand=True, padx=5, pady=5)
-        self.node_listbox = tk.Listbox(list_frame_node, selectmode=tk.SINGLE, exportselection=False)
+        self.node_listbox = tk.Listbox(list_frame_node, selectmode=tk.EXTENDED, exportselection=False, highlightthickness=0)
         self.node_listbox.pack(side="left", fill="both", expand=True)
         node_scrollbar = ttk.Scrollbar(list_frame_node, orient=tk.VERTICAL, command=self.node_listbox.yview)
         node_scrollbar.pack(side="right", fill="y")
         self.node_listbox.config(yscrollcommand=node_scrollbar.set)
 
         # --- Group Management Frame ---
-        self.group_listbox = tk.Listbox(group_frame, selectmode=tk.EXTENDED, exportselection=False)
+        self.group_listbox = tk.Listbox(group_frame, selectmode=tk.EXTENDED, exportselection=False, highlightthickness=0)
         group_scrollbar = ttk.Scrollbar(group_frame, orient=tk.VERTICAL, command=self.group_listbox.yview)
         self.group_listbox.pack(side="left", fill="both", expand=True, padx=5, pady=5)
         group_scrollbar.pack(side="right", fill="y")
         self.group_listbox.config(yscrollcommand=group_scrollbar.set)
         group_btn_frame = ttk.Frame(group_frame)
         group_btn_frame.pack(fill="x", padx=5, pady=(0,5))
-        self.add_to_group_button = ttk.Button(group_btn_frame, text="Add Node to Group(s)")
+
+        self.add_to_group_button = ttk.Button(group_btn_frame, text="Assign Group Membership")
+
         self.add_to_group_button.pack(side="left", expand=True, fill="x")
         self.load_txt_button = ttk.Button(group_btn_frame, text="Load TXT & Set")
         self.load_txt_button.pack(side="left", expand=True, fill="x")
@@ -211,8 +213,7 @@ class App:
         self.connect_button.config(command=self.controller.connect_serial)
         self.add_node_button.config(command=self.controller.add_node)
         self.delete_node_button.config(command=self.controller.delete_node)
-        self.node_listbox.bind("<Button-1>", self.controller.toggle_node_selection)
-        self.add_to_group_button.config(command=self.controller.add_node_to_groups)
+        self.add_to_group_button.config(command=self.controller.assign_group_membership)
         self.load_txt_button.config(command=self.controller.load_txt_and_set_groups)
         self.led_on_button.config(command=lambda: self.controller.set_led_state(1))
         self.led_off_button.config(command=lambda: self.controller.set_led_state(0))
