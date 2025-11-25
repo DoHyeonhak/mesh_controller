@@ -34,6 +34,10 @@ class AppController:
             record = {**data, **parsed_results}
             self.model.add_test_capture(record)
 
+            if cmd.startswith("test_all"):
+                self.model.update_test_statistics(record)
+                self.view.update_statistics_display()
+
         total_records = len(self.model.captured_led_res) + len(self.model.captured_test_res)
         self.view.update_capture_status(f"Capturing... ({total_records} records)")
 
@@ -154,23 +158,23 @@ class AppController:
         else:
             messagebox.showerror("Error", "잘못된 선택입니다.\n\n- 한 개의 노드와 하나 이상의 그룹, 또는\n- 여러 개의 노드와 한 개의 그룹을 선택하세요.")
 
-    def load_txt_and_set_groups(self):
-        filepath = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
-        if not filepath: return
-        try:
-            with open(filepath, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or ':' not in line: continue
-                    node_part, groups_part = [x.strip() for x in line.split(':', 1)]
-                    groups_str = ",".join([g.strip() for g in groups_part.split(',') if g.strip().isdigit()])
-                    if groups_str:
-                        cmd = f"set_group({node_part},{groups_str})"
-                        self.serial.send_command(cmd)
-                        self.view.root.update()
-                        self.view.root.after(100)
-        except Exception as e:
-            messagebox.showerror("Error", f"파일 처리 중 오류: {e}")
+    # def load_txt_and_set_groups(self):
+    #     filepath = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
+    #     if not filepath: return
+    #     try:
+    #         with open(filepath, 'r') as f:
+    #             for line in f:
+    #                 line = line.strip()
+    #                 if not line or ':' not in line: continue
+    #                 node_part, groups_part = [x.strip() for x in line.split(':', 1)]
+    #                 groups_str = ",".join([g.strip() for g in groups_part.split(',') if g.strip().isdigit()])
+    #                 if groups_str:
+    #                     cmd = f"set_group({node_part},{groups_str})"
+    #                     self.serial.send_command(cmd)
+    #                     self.view.root.update()
+    #                     self.view.root.after(100)
+    #     except Exception as e:
+    #         messagebox.showerror("Error", f"파일 처리 중 오류: {e}")
 
     def set_led_state(self, state):
         addresses = self._get_selected_addresses()
@@ -225,6 +229,36 @@ class AppController:
         self.set_led_state(1 if new_state else 0)
         
         self.view.root.after(int(self.model.interval * 1000), self._toggle_loop)
+
+    def start_test_loop(self):
+        try:
+            interval = float(self.view.test_interval_entry.get())
+            if interval <= 0: raise ValueError
+            self.model.test_interval = interval
+        except ValueError:
+            messagebox.showerror("Error", "유효한 간격(초)을 입력하세요. (예: 0.5)")
+            return
+
+        node_address = self._get_node_address_for_test("test_all_loop")
+        if not node_address:
+            messagebox.showerror("Error", "루프를 실행할 노드를 선택하세요.")
+            return
+        
+        self.model.test_loop_node_address = node_address
+        self.model.test_loop_running = True
+        self.view.log_message(f"[INFO] Test 루프 시작 (Node: {node_address})")
+        self._test_loop()
+
+    def stop_test_loop(self):
+        self.model.test_loop_running = False
+        self.view.log_message("[INFO] Test 루프 중지")
+
+    def _test_loop(self):
+        if not self.model.test_loop_running: return
+        
+        self.serial.send_command(f"test_all({self.model.test_loop_node_address})")
+        
+        self.view.root.after(int(self.model.test_interval * 1000), self._test_loop)
 
     def run_test_all(self):
         address = self._get_node_address_for_test("test_all")

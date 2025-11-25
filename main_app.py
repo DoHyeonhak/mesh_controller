@@ -15,7 +15,7 @@ class App:
         self.controller = None  # Controller는 나중에 설정
 
         self.root.title("LED & Group Control with Logging")
-        self.root.geometry("970x900")
+        self.root.geometry("970x1050")
 
         self._create_widgets()
         self._populate_initial_data()
@@ -49,22 +49,43 @@ class App:
         connection_frame = ttk.LabelFrame(scrollable_frame, text="Connection")
         node_frame = ttk.LabelFrame(scrollable_frame, text="Node Management")
         group_frame = ttk.LabelFrame(scrollable_frame, text="Group Management")
-        control_frame = ttk.LabelFrame(scrollable_frame, text="LED Control")
-        test_frame = ttk.LabelFrame(scrollable_frame, text="Test Commands")
-        log_frame = ttk.LabelFrame(scrollable_frame, text="Log & Capture")
+        
+        # Container for right-side controls
+        right_container = ttk.Frame(scrollable_frame)
+        control_frame = ttk.LabelFrame(right_container, text="LED Control")
+        loop_control_frame = ttk.LabelFrame(right_container, text="Loop Control")
 
+        test_frame = ttk.LabelFrame(scrollable_frame, text="Test Commands")
+        
+        bottom_frame = ttk.Frame(scrollable_frame)
+        log_frame = ttk.LabelFrame(bottom_frame, text="Log & Capture")
+        stats_frame = ttk.LabelFrame(bottom_frame, text="Statistics")
+
+        # --- Grid Layout ---
         connection_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
         node_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
         group_frame.grid(row=1, column=1, sticky="nsew", padx=5, pady=5)
-        control_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
-        test_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
-        log_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)
+        
+        right_container.grid(row=1, column=2, sticky="nsew", padx=5, pady=5)
+        control_frame.pack(fill="x")
+        loop_control_frame.pack(fill="x", pady=(5,0))
+
+        test_frame.grid(row=2, column=0, columnspan=3, sticky="ew", padx=5, pady=5)
+        
+        bottom_frame.grid(row=3, column=0, columnspan=3, sticky="nsew", padx=5, pady=5)
+        bottom_frame.grid_columnconfigure(0, weight=3)
+        bottom_frame.grid_columnconfigure(1, weight=1)
+        bottom_frame.grid_rowconfigure(0, weight=1)
+
+        log_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
+        stats_frame.grid(row=0, column=1, sticky="nsew", padx=(2, 0))
 
         scrollable_frame.grid_rowconfigure(1, weight=1)
-        scrollable_frame.grid_rowconfigure(4, weight=2)
+        scrollable_frame.grid_rowconfigure(3, weight=2)
         scrollable_frame.grid_columnconfigure(0, weight=1)
         scrollable_frame.grid_columnconfigure(1, weight=1)
-
+        scrollable_frame.grid_columnconfigure(2, weight=1)
+        
         # --- Connection Frame ---
         ttk.Label(connection_frame, text="Port:").grid(row=0, column=0, padx=5, pady=5)
         self.port_combo = ttk.Combobox(connection_frame) # Values set later
@@ -79,7 +100,7 @@ class App:
         # --- Node Management Frame ---
         node_input_frame = ttk.Frame(node_frame)
         node_input_frame.pack(fill="x", padx=5, pady=5)
-        ttk.Label(node_input_frame, text="Address (e.g., 45 or 45:50):").pack(side="left")  # edit this point
+        ttk.Label(node_input_frame, text="Address (e.g., 45 or 45:50):").pack(side="left")
         self.node_entry = ttk.Entry(node_input_frame)
         self.node_entry.pack(side="left", fill="x", expand=True)
         node_btn_frame = ttk.Frame(node_frame)
@@ -97,48 +118,69 @@ class App:
         self.node_listbox.config(yscrollcommand=node_scrollbar.set)
 
         # --- Group Management Frame ---
-        self.group_listbox = tk.Listbox(group_frame, selectmode=tk.EXTENDED, exportselection=False, highlightthickness=0)
-        group_scrollbar = ttk.Scrollbar(group_frame, orient=tk.VERTICAL, command=self.group_listbox.yview)
-        self.group_listbox.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+        group_btn_frame = ttk.Frame(group_frame)
+        group_btn_frame.pack(fill="x", padx=5, pady=5)
+        self.add_to_group_button = ttk.Button(group_btn_frame, text="Assign Group Membership")
+        self.add_to_group_button.pack(side="left", expand=True, fill="x")
+        
+        list_frame_group = ttk.Frame(group_frame)
+        list_frame_group.pack(fill="both", expand=True, padx=5, pady=5)
+        self.group_listbox = tk.Listbox(list_frame_group, selectmode=tk.EXTENDED, exportselection=False, highlightthickness=0)
+        self.group_listbox.pack(side="left", fill="both", expand=True)
+        group_scrollbar = ttk.Scrollbar(list_frame_group, orient=tk.VERTICAL, command=self.group_listbox.yview)
         group_scrollbar.pack(side="right", fill="y")
         self.group_listbox.config(yscrollcommand=group_scrollbar.set)
-        group_btn_frame = ttk.Frame(group_frame)
-        group_btn_frame.pack(fill="x", padx=5, pady=(0,5))
 
-        self.add_to_group_button = ttk.Button(group_btn_frame, text="Assign Group Membership")
+        # --- LED Control Frame Contents ---
+        led_basic_frame = ttk.LabelFrame(control_frame, text="Basic")
+        led_basic_frame.pack(fill="x", padx=5, pady=5)
+        self.led_on_button = ttk.Button(led_basic_frame, text="LED ON")
+        self.led_on_button.pack(side="left", fill="x", expand=True, padx=2)
+        self.led_off_button = ttk.Button(led_basic_frame, text="LED OFF")
+        self.led_off_button.pack(side="left", fill="x", expand=True, padx=2)
 
-        self.add_to_group_button.pack(side="left", expand=True, fill="x")
-        self.load_txt_button = ttk.Button(group_btn_frame, text="Load TXT & Set")
-        self.load_txt_button.pack(side="left", expand=True, fill="x")
-
-        # --- LED Control Frame ---
-        self.led_on_button = ttk.Button(control_frame, text="LED ON")
-        self.led_on_button.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
-        self.led_off_button = ttk.Button(control_frame, text="LED OFF")
-        self.led_off_button.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        ttk.Label(control_frame, text="Length (2-100):").grid(row=0, column=2, padx=(10, 0), pady=5, sticky="e")
-        self.leds_length_entry = ttk.Entry(control_frame, width=10)
-        self.leds_length_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
+        leds_frame = ttk.LabelFrame(control_frame, text="Set LEDs")
+        leds_frame.pack(fill="x", padx=5, pady=5)
+        ttk.Label(leds_frame, text="Length:").pack(side="left", padx=(5,0))
+        self.leds_length_entry = ttk.Entry(leds_frame, width=5)
+        self.leds_length_entry.pack(side="left", padx=5)
         self.leds_length_entry.insert(0, "80")
-        self.leds_on_button = ttk.Button(control_frame, text="LEDs ON (set_leds)")
-        self.leds_on_button.grid(row=0, column=4, padx=5, pady=5, sticky="ew")
-        self.leds_off_button = ttk.Button(control_frame, text="LEDs OFF (set_leds)")
-        self.leds_off_button.grid(row=0, column=5, padx=5, pady=5, sticky="ew")
-        ttk.Label(control_frame, text="Interval (s):").grid(row=1, column=0)
-        self.interval_entry = ttk.Entry(control_frame, width=10)
-        self.interval_entry.grid(row=1, column=1)
+        self.leds_on_button = ttk.Button(leds_frame, text="ON")
+        self.leds_on_button.pack(side="left", fill="x", expand=True, padx=2)
+        self.leds_off_button = ttk.Button(leds_frame, text="OFF")
+        self.leds_off_button.pack(side="left", fill="x", expand=True, padx=2)
+
+        # --- Loop Control Frame Contents ---
+        led_loop_frame = ttk.LabelFrame(loop_control_frame, text="LED Loop")
+        led_loop_frame.pack(fill="x", padx=5, pady=5)
+        ttk.Label(led_loop_frame, text="Interval (s):").pack(side="left", padx=(5,0))
+        self.interval_entry = ttk.Entry(led_loop_frame, width=5)
+        self.interval_entry.pack(side="left", padx=5)
         self.interval_entry.insert(0, "1")
-        self.start_loop_button = ttk.Button(control_frame, text="Start Loop")
-        self.start_loop_button.grid(row=1, column=2, padx=5, sticky="ew")
-        self.stop_loop_button = ttk.Button(control_frame, text="Stop Loop")
-        self.stop_loop_button.grid(row=1, column=3, padx=5, sticky="ew")
-        control_frame.grid_columnconfigure((0,1,2,3), weight=1)
+        self.start_loop_button = ttk.Button(led_loop_frame, text="Start")
+        self.start_loop_button.pack(side="left", fill="x", expand=True, padx=2)
+        self.stop_loop_button = ttk.Button(led_loop_frame, text="Stop")
+        self.stop_loop_button.pack(side="left", fill="x", expand=True, padx=2)
+
+        test_loop_frame = ttk.LabelFrame(loop_control_frame, text="Test Loop")
+        test_loop_frame.pack(fill="x", padx=5, pady=5)
+        ttk.Label(test_loop_frame, text="Test Interval (s):").pack(side="left", padx=5)
+        self.test_interval_entry = ttk.Entry(test_loop_frame, width=10)
+        self.test_interval_entry.pack(side="left", padx=5)
+        self.test_interval_entry.insert(0, "1")
+        self.start_test_loop_button = ttk.Button(test_loop_frame, text="Start Test Loop")
+        self.start_test_loop_button.pack(side="left", padx=5, fill='x', expand=True)
+        self.stop_test_loop_button = ttk.Button(test_loop_frame, text="Stop Test Loop")
+        self.stop_test_loop_button.pack(side="left", padx=5, fill='x', expand=True)
 
         # --- Test Commands Frame ---
+        test_frame.grid_columnconfigure(0, weight=2)
+        test_frame.grid_columnconfigure(1, weight=1)
+
         node_test_frame = ttk.LabelFrame(test_frame, text="Node Specific Tests")
-        node_test_frame.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+        node_test_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         gw_test_frame = ttk.LabelFrame(test_frame, text="Gateway Tests")
-        gw_test_frame.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+        gw_test_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
 
         # --- Node Specific Tests ---
         ttk.Label(node_test_frame, text="Node Addr:").grid(row=0, column=0, padx=5, pady=3, sticky="w")
@@ -156,6 +198,7 @@ class App:
         self.get_node_tx_button.grid(row=2, column=0, columnspan=2, sticky="ew", padx=5, pady=2)
         self.test_all_button = ttk.Button(node_test_frame, text="test_all")
         self.test_all_button.grid(row=2, column=2, columnspan=2, sticky="ew", padx=5, pady=2)
+        
         set_power_frame = ttk.Frame(node_test_frame)
         set_power_frame.grid(row=3, column=0, columnspan=4, sticky='ew', pady=2)
         ttk.Label(set_power_frame, text="TxPower (-32~10):").pack(side="left", padx=5)
@@ -163,6 +206,7 @@ class App:
         self.node_txpower_entry.pack(side="left", padx=5)
         self.set_node_tx_button = ttk.Button(set_power_frame, text="set_node_txpower")
         self.set_node_tx_button.pack(side="left", padx=5, fill='x', expand=True)
+        
         netoff_frame = ttk.Frame(node_test_frame)
         netoff_frame.grid(row=4, column=0, columnspan=4, sticky='ew', pady=2)
         ttk.Label(netoff_frame, text="NetOff Time(s):").pack(side="left", padx=(5,0))
@@ -186,6 +230,46 @@ class App:
         self.gw_txpower_entry.pack(side="left", padx=5)
         self.set_gw_tx_button = ttk.Button(gw_set_frame, text="set_gw_txpower")
         self.set_gw_tx_button.pack(side="left", fill="x", expand=True)
+
+        # --- Real-time Statistics Frame ---
+        self.stats_labels = {}
+        stats_display_frame = ttk.Frame(stats_frame)
+        stats_display_frame.pack(fill='x', padx=5, pady=5)
+
+        # Headers
+        headers = ["Metric", "Min", "Max", "Average"]
+        for i, header in enumerate(headers):
+            ttk.Label(stats_display_frame, text=header, font=('Helvetica', 10, 'bold')).grid(row=0, column=i, padx=5, pady=2, sticky='w')
+
+        # Data Rows
+        metrics = {
+            'response_gap_ms': 'GAP (ms)',
+            'rtt': 'RTT (ms)',
+            'latency': 'LATENCY (ms)',
+            'down_hop': 'DOWN HOP',
+            'up_hop': 'UP HOP'
+        }
+        for i, (metric, label) in enumerate(metrics.items(), 1):
+            ttk.Label(stats_display_frame, text=label).grid(row=i, column=0, padx=5, pady=2, sticky='w')
+            self.stats_labels[f'{metric}_min'] = ttk.Label(stats_display_frame, text="N/A")
+            self.stats_labels[f'{metric}_min'].grid(row=i, column=1, padx=5, pady=2, sticky='w')
+            self.stats_labels[f'{metric}_max'] = ttk.Label(stats_display_frame, text="N/A")
+            self.stats_labels[f'{metric}_max'].grid(row=i, column=2, padx=5, pady=2, sticky='w')
+            self.stats_labels[f'{metric}_avg'] = ttk.Label(stats_display_frame, text="N/A")
+            self.stats_labels[f'{metric}_avg'].grid(row=i, column=3, padx=5, pady=2, sticky='w')
+
+        # Counts Section
+        counts_frame = ttk.Frame(stats_frame)
+        counts_frame.pack(fill='x', padx=5, pady=5)
+        ttk.Label(counts_frame, text="Total:", font=('Helvetica', 10, 'bold')).pack(side='left', padx=(5,0))
+        self.stats_labels['total'] = ttk.Label(counts_frame, text="0")
+        self.stats_labels['total'].pack(side='left', padx=(0,10))
+        ttk.Label(counts_frame, text="Success:", font=('Helvetica', 10, 'bold')).pack(side='left')
+        self.stats_labels['success'] = ttk.Label(counts_frame, text="0")
+        self.stats_labels['success'].pack(side='left', padx=(0,10))
+        ttk.Label(counts_frame, text="Failure:", font=('Helvetica', 10, 'bold')).pack(side='left')
+        self.stats_labels['failure'] = ttk.Label(counts_frame, text="0")
+        self.stats_labels['failure'].pack(side='left', padx=(0,10))
 
         # --- Log & Capture Frame ---
         log_display_frame = ttk.Frame(log_frame)
@@ -214,7 +298,7 @@ class App:
         self.add_node_button.config(command=self.controller.add_node)
         self.delete_node_button.config(command=self.controller.delete_node)
         self.add_to_group_button.config(command=self.controller.assign_group_membership)
-        self.load_txt_button.config(command=self.controller.load_txt_and_set_groups)
+        # self.load_txt_button.config(command=self.controller.load_txt_and_set_groups)
         self.led_on_button.config(command=lambda: self.controller.set_led_state(1))
         self.led_off_button.config(command=lambda: self.controller.set_led_state(0))
         self.leds_on_button.config(command=lambda: self.controller.run_set_leds(1))
@@ -234,12 +318,15 @@ class App:
         self.capture_button.config(command=self.controller.toggle_capture)
         self.save_led_button.config(command=self.controller.save_led_data)
         self.save_test_button.config(command=self.controller.save_test_data)
+        self.start_test_loop_button.config(command=self.controller.start_test_loop)
+        self.stop_test_loop_button.config(command=self.controller.stop_test_loop)
 
     def _populate_initial_data(self):
         """모델의 데이터로 UI를 채웁니다."""
         self.port_combo['values'] = SerialController.scan_ports()
         for group in self.model.groups:
             self.group_listbox.insert(tk.END, str(group))
+        self.update_statistics_display()
 
     def update_node_listbox(self):
         """모델의 노드 목록을 기반으로 UI를 업데이트합니다."""
@@ -273,6 +360,28 @@ class App:
                 self.save_led_button.state(['!disabled'])
             if self.model.captured_test_res:
                 self.save_test_button.state(['!disabled'])
+        self.update_statistics_display()
+
+    def update_statistics_display(self):
+        """모델의 통계 데이터로 UI를 업데이트합니다."""
+        stats = self.model.test_statistics
+        counts = self.model.command_counts
+
+        for metric, data in stats.items():
+            count = data['count']
+            if count > 0:
+                avg = data['sum'] / count
+                self.stats_labels[f'{metric}_min'].config(text=f"{data['min']:.2f}")
+                self.stats_labels[f'{metric}_max'].config(text=f"{data['max']:.2f}")
+                self.stats_labels[f'{metric}_avg'].config(text=f"{avg:.2f}")
+            else:
+                self.stats_labels[f'{metric}_min'].config(text="N/A")
+                self.stats_labels[f'{metric}_max'].config(text="N/A")
+                self.stats_labels[f'{metric}_avg'].config(text="N/A")
+
+        self.stats_labels['total'].config(text=str(counts['total']))
+        self.stats_labels['success'].config(text=str(counts['success']))
+        self.stats_labels['failure'].config(text=str(counts['failure']))
 
 
 if __name__ == "__main__":
