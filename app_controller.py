@@ -158,23 +158,52 @@ class AppController:
         else:
             messagebox.showerror("Error", "잘못된 선택입니다.\n\n- 한 개의 노드와 하나 이상의 그룹, 또는\n- 여러 개의 노드와 한 개의 그룹을 선택하세요.")
 
-    # def load_txt_and_set_groups(self):
-    #     filepath = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
-    #     if not filepath: return
-    #     try:
-    #         with open(filepath, 'r') as f:
-    #             for line in f:
-    #                 line = line.strip()
-    #                 if not line or ':' not in line: continue
-    #                 node_part, groups_part = [x.strip() for x in line.split(':', 1)]
-    #                 groups_str = ",".join([g.strip() for g in groups_part.split(',') if g.strip().isdigit()])
-    #                 if groups_str:
-    #                     cmd = f"set_group({node_part},{groups_str})"
-    #                     self.serial.send_command(cmd)
-    #                     self.view.root.update()
-    #                     self.view.root.after(100)
-    #     except Exception as e:
-    #         messagebox.showerror("Error", f"파일 처리 중 오류: {e}")
+    def load_txt_and_set_groups(self):
+        filepath = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
+        if not filepath: return
+
+        successful_nodes = []
+        ignored_nodes = []
+        
+        try:
+            with open(filepath, 'r') as f:
+                lines = f.readlines()
+
+            total_lines = len(lines)
+            self.view.log_message(f"[INFO] TXT 파일에서 {total_lines}개의 라인을 읽었습니다. 그룹 설정을 시작합니다.")
+
+            for i, line in enumerate(lines):
+                line = line.strip()
+                if not line or ':' not in line: continue
+                
+                node_part, groups_part = [x.strip() for x in line.split(':', 1)]
+                groups_str = ",".join([g.strip() for g in groups_part.split(',') if g.strip().isdigit()])
+                
+                if groups_str:
+                    cmd = f"set_group({node_part},{groups_str})"
+                    self.serial.send_command(cmd)
+                    
+                    # 응답 대기 (2초 타임아웃)
+                    wait_start_time = time.time()
+                    while self.serial.is_waiting_response():
+                        time.sleep(0.05)
+                        self.view.root.update()
+                        if time.time() - wait_start_time > 2.0:
+                            ignored_nodes.append(node_part)
+                            break
+                    else: # while 루프가 break 없이 정상적으로 종료된 경우
+                        successful_nodes.append(node_part)
+
+            # 최종 결과 로깅
+            if successful_nodes:
+                self.view.log_message(f"[INFO] {len(successful_nodes)}개 노드의 그룹 설정 완료: {', '.join(successful_nodes)}")
+            if ignored_nodes:
+                log_msg = f"[WARN] {len(ignored_nodes)}개 노드에 대한 응답이 없어 명령이 무시되었을 수 있습니다: {', '.join(ignored_nodes)}"
+                self.view.log_message(log_msg)
+                messagebox.showwarning("Timeout", log_msg)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"파일 처리 중 오류: {e}")
 
     def set_led_state(self, state):
         addresses = self._get_selected_addresses()

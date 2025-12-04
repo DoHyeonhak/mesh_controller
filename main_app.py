@@ -122,6 +122,8 @@ class App:
         group_btn_frame.pack(fill="x", padx=5, pady=5)
         self.add_to_group_button = ttk.Button(group_btn_frame, text="Assign Group Membership")
         self.add_to_group_button.pack(side="left", expand=True, fill="x")
+        self.load_txt_button = ttk.Button(group_btn_frame, text="Load Groups from TXT")
+        self.load_txt_button.pack(side="left", expand=True, fill="x", padx=(5,0))
         
         list_frame_group = ttk.Frame(group_frame)
         list_frame_group.pack(fill="both", expand=True, padx=5, pady=5)
@@ -298,7 +300,8 @@ class App:
         self.add_node_button.config(command=self.controller.add_node)
         self.delete_node_button.config(command=self.controller.delete_node)
         self.add_to_group_button.config(command=self.controller.assign_group_membership)
-        # self.load_txt_button.config(command=self.controller.load_txt_and_set_groups)
+        self.load_txt_button.config(command=self.controller.load_txt_and_set_groups)
+        self.load_txt_button.config(command=self.controller.load_txt_and_set_groups)
         self.led_on_button.config(command=lambda: self.controller.set_led_state(1))
         self.led_off_button.config(command=lambda: self.controller.set_led_state(0))
         self.leds_on_button.config(command=lambda: self.controller.run_set_leds(1))
