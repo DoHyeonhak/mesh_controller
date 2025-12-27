@@ -291,7 +291,13 @@ class AppController:
 
     def run_test_all(self):
         address = self._get_node_address_for_test("test_all")
-        if address: self.serial.send_command(f"test_all({address})")
+        if not address: return
+        try:
+            ms = int(self.view.test_all_ms_entry.get().strip())
+        except ValueError:
+            messagebox.showerror("Error", "ms 값은 숫자여야 합니다.")
+            return
+        self.serial.send_command(f"test_all({address},{ms})")
 
     def run_test_rtt(self):
         address = self._get_node_address_for_test("test_rtt")
