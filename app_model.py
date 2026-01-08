@@ -13,6 +13,7 @@ class AppModel:
         self.test_loop_running = False
         self.test_interval = 1.0
         self.test_loop_node_address = None
+        self.test_loop_mode = None # 'no_delay' or 'with_delay'
 
         self.test_statistics = self._init_stats()
         self.command_counts = self._init_counts()

@@ -259,7 +259,7 @@ class AppController:
         
         self.view.root.after(int(self.model.interval * 1000), self._toggle_loop)
 
-    def start_test_loop(self):
+    def start_test_all_no_delay_loop(self):
         try:
             interval = float(self.view.test_interval_entry.get())
             if interval <= 0: raise ValueError
@@ -274,8 +274,36 @@ class AppController:
             return
         
         self.model.test_loop_node_address = node_address
+        self.model.test_loop_mode = 'no_delay'
         self.model.test_loop_running = True
-        self.view.log_message(f"[INFO] Test 루프 시작 (Node: {node_address})")
+        self.view.log_message(f"[INFO] Test 루프 시작 (Node: {node_address}, Mode: no delay)")
+        self._test_loop()
+
+    def start_test_all_with_delay_loop(self):
+        try:
+            interval = float(self.view.test_interval_entry.get())
+            if interval <= 0: raise ValueError
+            self.model.test_interval = interval
+        except ValueError:
+            messagebox.showerror("Error", "유효한 간격(초)을 입력하세요. (예: 0.5)")
+            return
+
+        node_address = self._get_node_address_for_test("test_all_loop")
+        if not node_address:
+            messagebox.showerror("Error", "루프를 실행할 노드를 선택하세요.")
+            return
+        
+        try:
+            ms = int(self.view.test_all_ms_entry_loop.get().strip())
+            self.model.test_loop_delay_value = ms
+        except ValueError:
+            messagebox.showerror("Error", "test_all의 ms 값은 숫자여야 합니다.")
+            return
+        
+        self.model.test_loop_node_address = node_address
+        self.model.test_loop_mode = 'with_delay'
+        self.model.test_loop_running = True
+        self.view.log_message(f"[INFO] Test 루프 시작 (Node: {node_address}, Mode: with delay, Delay: {ms}ms)")
         self._test_loop()
 
     def stop_test_loop(self):
@@ -285,7 +313,20 @@ class AppController:
     def _test_loop(self):
         if not self.model.test_loop_running: return
         
-        self.serial.send_command(f"test_all({self.model.test_loop_node_address})")
+        address = self.model.test_loop_node_address
+        command = ""
+
+        if self.model.test_loop_mode == 'no_delay':
+            command = f"test_all({address})"
+        elif self.model.test_loop_mode == 'with_delay':
+            delay = self.model.test_loop_delay_value
+            command = f"test_all({address},{delay})"
+        else:
+            self.view.log_message("[ERROR] 알 수 없는 Test 루프 모드입니다.")
+            self.model.test_loop_running = False
+            return
+
+        self.serial.send_command(command)
         
         self.view.root.after(int(self.model.test_interval * 1000), self._test_loop)
 
@@ -293,7 +334,7 @@ class AppController:
         address = self._get_node_address_for_test("test_all")
         if not address: return
         try:
-            ms = int(self.view.test_all_ms_entry.get().strip())
+            ms = int(self.view.test_all_ms_entry_single.get().strip())
         except ValueError:
             messagebox.showerror("Error", "ms 값은 숫자여야 합니다.")
             return
@@ -316,14 +357,14 @@ class AppController:
         if address: self.serial.send_command(f"test_rssi({address})")
 
     def run_get_node_txpower(self):
-        address = self._get_node_address_for_test("get_node_txpower")
+        address = self._get_gw_node_address("get_node_txpower")
         if address: self.serial.send_command(f"get_node_txpower({address})")
 
     def run_set_node_txpower(self):
-        address = self._get_node_address_for_test("set_node_txpower")
+        address = self._get_gw_node_address("set_node_txpower")
         if not address: return
         try:
-            power = int(self.view.node_txpower_entry.get().strip())
+            power = int(self.view.gw_node_txpower_entry.get().strip())
             if not (-32 <= power <= 10): raise ValueError
         except ValueError:
             messagebox.showerror("Error", "TxPower 값은 -32에서 10 사이의 정수여야 합니다.")
@@ -451,12 +492,13 @@ class AppController:
                 return None
             return self.view.node_listbox.get(selected_nodes[0])
 
-    def toggle_node_selection(self, event):
-        widget = event.widget
-        clicked_index = widget.nearest(event.y)
-        if clicked_index in widget.curselection():
-            widget.selection_clear(clicked_index)
+    def _get_gw_node_address(self, command_name):
+        addr_input = self.view.gw_node_addr_entry.get().strip()
+        if addr_input:
+            return addr_input
         else:
-            widget.selection_clear(0, tk.END)
-            widget.selection_set(clicked_index)
-        return "break"
+            selected_nodes = self.view.node_listbox.curselection()
+            if not selected_nodes:
+                messagebox.showerror("Error", f"게이트웨이 테스트의 노드 주소를 입력하거나 리스트에서 노드를 선택하세요 ({command_name}).")
+                return None
+            return self.view.node_listbox.get(selected_nodes[0])
