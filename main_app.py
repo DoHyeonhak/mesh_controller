@@ -169,17 +169,33 @@ class App:
         self.leds_off_button.pack(side="left", fill="x", expand=True, padx=2)
 
         # --- Loop Control Frame Contents ---
-        led_loop_frame = ttk.LabelFrame(loop_control_frame, text="LED Loop")
+        led_loop_frame = ttk.LabelFrame(
+            loop_control_frame, text="LED/LEDs Loop")
         led_loop_frame.pack(fill="x", padx=5, pady=5)
-        ttk.Label(led_loop_frame, text="Interval (s):").pack(
+
+        loop_config_frame = ttk.Frame(led_loop_frame)
+        loop_config_frame.pack(fill='x', expand=True, padx=2, pady=2)
+        ttk.Label(loop_config_frame, text="Interval (s):").pack(
             side="left", padx=(5, 0))
-        self.interval_entry = ttk.Entry(led_loop_frame, width=5)
+        self.interval_entry = ttk.Entry(loop_config_frame, width=5)
         self.interval_entry.pack(side="left", padx=5)
         self.interval_entry.insert(0, "1")
-        self.start_loop_button = ttk.Button(led_loop_frame, text="Start")
-        self.start_loop_button.pack(side="left", fill="x", expand=True, padx=2)
-        self.stop_loop_button = ttk.Button(led_loop_frame, text="Stop")
-        self.stop_loop_button.pack(side="left", fill="x", expand=True, padx=2)
+
+        ttk.Label(loop_config_frame, text="Length:").pack(
+            side="left", padx=(5, 0))
+        self.loop_length_entry = ttk.Entry(loop_config_frame, width=5)
+        self.loop_length_entry.pack(side="left", padx=5)
+        self.loop_length_entry.insert(0, "-1")
+
+        loop_buttons_frame = ttk.Frame(led_loop_frame)
+        loop_buttons_frame.pack(fill='x', expand=True, padx=2, pady=2)
+        self.start_loop_button = ttk.Button(
+            loop_buttons_frame, text="Start LED/LEDs Loop")
+        self.start_loop_button.pack(
+            side="left", fill="x", expand=True, padx=2)
+
+        self.stop_loop_button = ttk.Button(led_loop_frame, text="Stop Loop")
+        self.stop_loop_button.pack(fill="x", expand=True, padx=2, pady=2)
 
         test_loop_frame = ttk.LabelFrame(loop_control_frame, text="Test Loop")
         test_loop_frame.pack(fill="x", padx=5, pady=5)
@@ -296,6 +312,19 @@ class App:
         self.set_gw_tx_button = ttk.Button(gw_set_frame, text="set_gw_txpower")
         self.set_gw_tx_button.pack(side="left", fill="x", expand=True)
 
+        # Gateway Channel Controls
+        self.get_gw_channel_button = ttk.Button(
+            gw_test_frame, text="get_gw_channel")
+        self.get_gw_channel_button.pack(fill="x", padx=5, pady=2)
+        gw_set_channel_frame = ttk.Frame(gw_test_frame)
+        gw_set_channel_frame.pack(fill="x", padx=5, pady=2)
+        ttk.Label(gw_set_channel_frame, text="Channel:").pack(side="left")
+        self.gw_channel_entry = ttk.Entry(gw_set_channel_frame, width=10)
+        self.gw_channel_entry.pack(side="left", padx=5)
+        self.set_gw_channel_button = ttk.Button(
+            gw_set_channel_frame, text="set_gw_channel")
+        self.set_gw_channel_button.pack(side="left", fill="x", expand=True)
+
         # Separator
         ttk.Separator(gw_test_frame, orient='horizontal').pack(
             fill='x', pady=10, padx=5)
@@ -320,6 +349,23 @@ class App:
         self.set_gw_node_tx_button = ttk.Button(
             set_node_power_frame, text="set_node_txpower")
         self.set_gw_node_tx_button.pack(side="left", fill="x", expand=True)
+
+        # Node Channel Controls
+        gw_node_channel_frame = ttk.Frame(gw_test_frame)
+        gw_node_channel_frame.pack(fill='x', padx=5, pady=2)
+        self.get_node_channel_button = ttk.Button(
+            gw_node_channel_frame, text="get_node_channel")
+        self.get_node_channel_button.pack(
+            side="left", fill="x", expand=True, padx=5)
+
+        set_node_channel_frame = ttk.Frame(gw_test_frame)
+        set_node_channel_frame.pack(fill="x", padx=5, pady=2)
+        ttk.Label(set_node_channel_frame, text="Channel:").pack(side="left")
+        self.node_channel_entry = ttk.Entry(set_node_channel_frame, width=10)
+        self.node_channel_entry.pack(side="left", padx=5)
+        self.set_node_channel_button = ttk.Button(
+            set_node_channel_frame, text="set_node_channel")
+        self.set_node_channel_button.pack(side="left", fill="x", expand=True)
 
         # --- Real-time Statistics Frame ---
         self.stats_labels = {}
@@ -419,7 +465,7 @@ class App:
         self.leds_off_button.config(
             command=lambda: self.controller.run_set_leds(0))
         self.start_loop_button.config(
-            command=self.controller.start_toggle_loop)
+            command=self.controller.start_led_loop)
         self.stop_loop_button.config(command=self.controller.stop_loop)
         self.test_rtt_button.config(command=self.controller.run_test_rtt)
         self.test_latency_button.config(
@@ -438,6 +484,15 @@ class App:
             command=self.controller.run_get_node_txpower)
         self.set_gw_node_tx_button.config(
             command=self.controller.run_set_node_txpower)
+
+        self.get_gw_channel_button.config(
+            command=self.controller.run_get_gw_channel)
+        self.set_gw_channel_button.config(
+            command=self.controller.run_set_gw_channel)
+        self.get_node_channel_button.config(
+            command=self.controller.run_get_node_channel)
+        self.set_node_channel_button.config(
+            command=self.controller.run_set_node_channel)
 
         self.capture_button.config(command=self.controller.toggle_capture)
         self.save_led_button.config(command=self.controller.save_led_data)

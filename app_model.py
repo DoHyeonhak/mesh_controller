@@ -1,6 +1,7 @@
 
 class AppModel:
     """애플리케이션의 데이터와 상태를 관리하는 클래스 (Model)"""
+
     def __init__(self):
         self.nodes = []
         self.groups = list(range(0xF000, 0xFFFF))
@@ -13,7 +14,7 @@ class AppModel:
         self.test_loop_running = False
         self.test_interval = 1.0
         self.test_loop_node_address = None
-        self.test_loop_mode = None # 'no_delay' or 'with_delay'
+        self.test_loop_mode = None  # 'no_delay' or 'with_delay'
 
         self.test_statistics = self._init_stats()
         self.command_counts = self._init_counts()
@@ -80,27 +81,27 @@ class AppModel:
             return
 
         self.command_counts['total'] += 1
-        
+
         # 'no response'와 같은 실패 케이스 (-1) 확인
         if record.get('rtt', -1) == -1 and record.get('latency', -1) == -1:
             self.command_counts['failure'] += 1
             return
-        
+
         self.command_counts['success'] += 1
 
         for metric in self.test_statistics.keys():
             value = record.get(metric)
             if value is not None and value != -1:
                 stats = self.test_statistics[metric]
-                
+
                 if stats['min'] is None or value < stats['min']:
                     stats['min'] = value
                 if stats['max'] is None or value > stats['max']:
                     stats['max'] = value
-                
+
                 stats['sum'] += value
                 stats['count'] += 1
-    
+
     def clear_led_captures(self):
         """캡처된 LED 데이터만 초기화합니다."""
         self.captured_led_res.clear()
