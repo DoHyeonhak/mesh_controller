@@ -2,6 +2,35 @@
 
 본 문서는 Merlot Macro 애플리케이션의 컨트롤러 구성 요소에 대한 상세 설명서입니다. 애플리케이션은 Model-View-Controller (MVC) 아키텍처 패턴을 기반으로 설계되었으며, 이를 통해 데이터, 사용자 인터페이스, 비즈니스 로직이 명확하게 분리되어 있습니다. 본 문서에서는 두 가지 핵심 컨트롤러인 `AppController`와 `SerialController`의 역할, 책임, 그리고 상호 작용 방식에 대해 기술합니다.
 
+---
+
+## 환경 설정
+
+### Python 버전
+
+**Python 3.11** 권장
+
+### 가상환경 생성 및 활성화
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+```
+
+### 패키지 설치
+
+```bash
+pip install -r requirements.txt
+```
+
+### 실행
+
+```bash
+python main_app.py
+```
+
+---
+
 ## 1. 아키텍처 및 주요 구성 요소
 
 애플리케이션의 핵심 아키텍처는 다음과 같은 4개의 주요 파이썬 파일로 구성됩니다.
