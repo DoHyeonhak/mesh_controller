@@ -45,6 +45,14 @@ class AppController:
         self.view.update_capture_status(
             f"Capturing... ({total_records} records)")
 
+    def refresh_ports(self):
+        ports = self.serial.scan_ports()
+        self.view.port_combo['values'] = ports
+        if ports:
+            self.view.port_combo.set(ports[0])
+        else:
+            self.view.port_combo.set('')
+
     def connect_serial(self):
         port = self.view.port_combo.get()
         baud = self.view.baud_entry.get()
@@ -131,7 +139,7 @@ class AppController:
                 # waiting response (2 seconds)
                 wait_start_time = time.time()
                 while self.serial.is_waiting_response():
-                    self.view.update()
+                    self.view.root.update()
                     if time.time() - wait_start_time > 2.0:
                         ignored_nodes.append(node_addr)
                         break
@@ -187,7 +195,7 @@ class AppController:
                     wait_start_time = time.time()
                     while self.serial.is_waiting_response():
                         time.sleep(0.05)
-                        self.view.update()
+                        self.view.root.update()
                         if time.time() - wait_start_time > 2.0:
                             ignored_nodes.append(node_part)
                             break
@@ -295,7 +303,7 @@ class AppController:
                 cmd = f"set_leds({addr},{state},{length})"
                 self.serial.send_command(cmd)
 
-        self.view.after(
+        self.view.root.after(
             int(self.model.interval * 1000), self._toggle_loop)
 
     def start_test_all_no_delay_loop(self):
@@ -372,7 +380,7 @@ class AppController:
 
         self.serial.send_command(command)
 
-        self.view.after(
+        self.view.root.after(
             int(self.model.test_interval * 1000), self._test_loop)
 
     def run_test_all(self):

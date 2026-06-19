@@ -102,8 +102,10 @@ class App:
         self.baud_entry = ttk.Entry(connection_frame)
         self.baud_entry.grid(row=0, column=3, padx=5, pady=5)
         self.baud_entry.insert(0, "115200")
+        self.refresh_ports_button = ttk.Button(connection_frame, text="Refresh")
+        self.refresh_ports_button.grid(row=0, column=4, padx=5, pady=5)
         self.connect_button = ttk.Button(connection_frame, text="Connect")
-        self.connect_button.grid(row=0, column=4, padx=5, pady=5)
+        self.connect_button.grid(row=0, column=5, padx=5, pady=5)
 
         # --- Node Management Frame ---
         node_input_frame = ttk.Frame(node_frame)
@@ -402,7 +404,7 @@ class App:
             self.stats_labels[f'{metric}_avg'].grid(
                 row=i, column=3, padx=5, pady=2, sticky='w')
 
-        # Counts Section
+        # Counts Section (test_all)
         counts_frame = ttk.Frame(stats_frame)
         counts_frame.pack(fill='x', padx=5, pady=5)
         ttk.Label(counts_frame, text="Total:", font=(
@@ -447,6 +449,7 @@ class App:
 
     def _bind_commands(self):
         """컨트롤러의 메소드에 위젯 이벤트를 바인딩합니다."""
+        self.refresh_ports_button.config(command=self.controller.refresh_ports)
         self.connect_button.config(command=self.controller.connect_serial)
         self.add_node_button.config(command=self.controller.add_node)
         self.delete_node_button.config(command=self.controller.delete_node)
