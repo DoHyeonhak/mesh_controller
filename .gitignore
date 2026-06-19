@@ -1,3 +1,5 @@
 *.txt
 
 backup.py
+.venv
+__pycache__
