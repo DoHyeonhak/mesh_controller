@@ -5,6 +5,8 @@ import pandas as pd
 import re
 import time
 
+_UPLINK_DATA_PATTERN = re.compile(r"uplink_data\((\d+(?:,\s*\d+)*)\)")
+
 
 class AppController:
     """애플리케이션의 비즈니스 로직과 사용자 입력을 처리하는 컨트롤러"""
@@ -15,13 +17,42 @@ class AppController:
         self.view = view
         self.serial.data_callback = self.handle_serial_data
 
+        # Throughput 측정 상태
+        self._tp_state = 'IDLE'   # 'IDLE' | 'SENDING'
+        self._tp_addr = None
+        self._tp_ifs = 0
+        self._tp_packet_size = 0
+        self._tp_total = 0
+        self._tp_sent = 0
+        self._tp_flow = 0
+
     # Callback & Core Logic Methods
     def handle_serial_data(self, data):
         """SerialController로부터 구조화된 데이터를 받아 모델에 저장하는 콜백"""
-        if not self.model.is_capturing:
+        cmd = data.get("command", "")
+
+        # Throughput 전송 연속성은 캡처 상태와 무관하게 항상 처리
+        if cmd.startswith("send_data_noack") and self._tp_state == 'SENDING':
+            self._tp_sent += 1
+            self.view.update_throughput_status(
+                self._tp_flow, self._tp_sent,
+                f"Sending... ({self._tp_sent}/{self._tp_total})"
+            )
+            if self._tp_sent < self._tp_total:
+                self._send_next_tp_packet()
+            else:
+                self._tp_state = 'IDLE'
+                self.view.update_throughput_status(
+                    self._tp_flow, self._tp_sent, "Done"
+                )
+                self.view.log_message(
+                    f"[THROUGHPUT] Flow {self._tp_flow} done | "
+                    f"packets={self._tp_total} | size={self._tp_packet_size}B | IFS={self._tp_ifs}ms"
+                )
             return
 
-        cmd = data.get("command", "")
+        if not self.model.is_capturing:
+            return
 
         if cmd.startswith("set_led"):
             self.model.add_led_capture(data)
@@ -61,6 +92,7 @@ class AppController:
             return
         if self.serial.connect(port, baud):
             self.view.update_connection_status(connected=True)
+            self.serial.start_unsolicited_reader(self._handle_uplink_data)
         else:
             messagebox.showerror("Error", "연결에 실패했습니다. 로그를 확인하세요.")
 
@@ -275,10 +307,12 @@ class AppController:
             return
 
         self.model.start_loop()
+        self.view.set_led_loop_buttons(running=True)
         self._toggle_loop()
 
     def stop_loop(self):
         self.model.stop_loop()
+        self.view.set_led_loop_buttons(running=False)
         self.view.log_message("[INFO] 반복 실행 중지")
 
     def _toggle_loop(self):
@@ -306,28 +340,6 @@ class AppController:
         self.view.root.after(
             int(self.model.interval * 1000), self._toggle_loop)
 
-    def start_test_all_no_delay_loop(self):
-        try:
-            interval = float(self.view.test_interval_entry.get())
-            if interval <= 0:
-                raise ValueError
-            self.model.test_interval = interval
-        except ValueError:
-            messagebox.showerror("Error", "유효한 간격(초)을 입력하세요. (예: 0.5)")
-            return
-
-        node_address = self._get_node_address_for_test("test_all_loop")
-        if not node_address:
-            messagebox.showerror("Error", "루프를 실행할 노드를 선택하세요.")
-            return
-
-        self.model.test_loop_node_address = node_address
-        self.model.test_loop_mode = 'no_delay'
-        self.model.test_loop_running = True
-        self.view.log_message(
-            f"[INFO] Test 루프 시작 (Node: {node_address}, Mode: no delay)")
-        self._test_loop()
-
     def start_test_all_with_delay_loop(self):
         try:
             interval = float(self.view.test_interval_entry.get())
@@ -353,12 +365,14 @@ class AppController:
         self.model.test_loop_node_address = node_address
         self.model.test_loop_mode = 'with_delay'
         self.model.test_loop_running = True
+        self.view.set_test_loop_buttons(running=True)
         self.view.log_message(
             f"[INFO] Test 루프 시작 (Node: {node_address}, Mode: with delay, Delay: {ms}ms)")
         self._test_loop()
 
     def stop_test_loop(self):
         self.model.test_loop_running = False
+        self.view.set_test_loop_buttons(running=False)
         self.view.log_message("[INFO] Test 루프 중지")
 
     def _test_loop(self):
@@ -366,11 +380,8 @@ class AppController:
             return
 
         address = self.model.test_loop_node_address
-        command = ""
 
-        if self.model.test_loop_mode == 'no_delay':
-            command = f"test_all({address})"
-        elif self.model.test_loop_mode == 'with_delay':
+        if self.model.test_loop_mode == 'with_delay':
             delay = self.model.test_loop_delay_value
             command = f"test_all({address},{delay})"
         else:
@@ -553,6 +564,114 @@ class AppController:
         except Exception as e:
             self.view.log_message(f"[ERROR] Test 로그 저장 실패: {e}")
             messagebox.showerror("Error", f"Test 로그 저장 중 오류가 발생했습니다:\n{e}")
+
+    def run_throughput_test(self):
+        if self._tp_state != 'IDLE':
+            messagebox.showwarning("Warning", "이미 Throughput 측정이 진행 중입니다.")
+            return
+
+        addr = self.view.tp_addr_entry.get().strip()
+        if not addr:
+            messagebox.showerror("Error", "Target Addr를 입력하세요.")
+            return
+
+        try:
+            ifs = int(self.view.tp_ifs_entry.get().strip())
+            if ifs < 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("Error", "IFS는 0 이상의 정수여야 합니다.")
+            return
+
+        try:
+            packet_size = int(self.view.tp_size_entry.get().strip())
+            if packet_size < 2:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("Error", "Packet Size는 2 이상의 정수여야 합니다 (flow + seq 최소 2바이트).")
+            return
+
+        try:
+            count = int(self.view.tp_count_entry.get().strip())
+            if count < 1:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("Error", "Packet Count는 1 이상의 정수여야 합니다.")
+            return
+
+        flow = self.model.next_throughput_flow()
+
+        self._tp_state = 'SENDING'
+        self._tp_addr = addr
+        self._tp_ifs = ifs
+        self._tp_packet_size = packet_size
+        self._tp_total = count
+        self._tp_sent = 0
+        self._tp_flow = flow
+
+        self.view.log_message(
+            f"[THROUGHPUT] Flow {flow} start | "
+            f"addr={addr} | IFS={ifs}ms | size={packet_size}B | count={count}"
+        )
+        self.view.update_throughput_status(flow, 0, "Starting...")
+        self._send_next_tp_packet()
+
+    def _send_next_tp_packet(self):
+        seq = self._tp_sent
+        padding_count = self._tp_packet_size - 2  # flow(1) + seq(1) 제외
+        payload = [self._tp_flow, seq] + [0] * padding_count
+        payload_str = ",".join(str(b) for b in payload)
+        cmd = f"send_data_noack({self._tp_addr},{self._tp_ifs},{payload_str})"
+        self.serial.send_command(cmd)
+
+    def _handle_uplink_data(self, line):
+        """Parse uplink_data(src, flow, t3,t2,t1,t0, lost_hi,lost_lo) from Target Node."""
+        m = _UPLINK_DATA_PATTERN.search(line.strip())
+        if not m:
+            return
+        args = [int(x.strip()) for x in m.group(1).split(",")]
+        # Minimum 8 args: src_addr + flow + 4-byte tput + 2-byte lost
+        if len(args) < 8:
+            return
+        src_addr = args[0]
+        flow = args[1]
+        # Throughput was scaled ×100 on the node side (unit: 0.01 bps) → divide to restore
+        tput_scaled = (args[2] << 24) | (args[3] << 16) | (args[4] << 8) | args[5]
+        throughput_bps = tput_scaled / 100.0
+        lost = (args[6] << 8) | args[7]
+        self.view.log_message(
+            f"[NODE REPORT] src={src_addr} | Flow {flow} | "
+            f"Throughput: {throughput_bps:.2f} bps ({throughput_bps/1000:.2f} kbps) | Lost: {lost}"
+        )
+        self.model.add_tp_capture(flow, throughput_bps, lost)
+        if self.model.is_capturing:
+            self.view.update_statistics_display()
+        # Send ACK: payload [0, flow] → Node detects flow=0 as ACK marker, seq=flow as confirmation
+        self.serial.send_command(f"send_data_noack({src_addr},0,0,{flow})")
+
+    def save_tp_data(self):
+        if not self.model.captured_tp_res:
+            messagebox.showinfo("Info", "저장할 Throughput 데이터가 없습니다.")
+            return
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel files", "*.xlsx")],
+            title="Save Throughput Log As"
+        )
+        if not filepath:
+            return
+        try:
+            with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+                pd.DataFrame(self.model.captured_tp_res).to_excel(
+                    writer, sheet_name="Throughput Results", index=False
+                )
+                pd.DataFrame(self.model.captured_tp_raw_log).to_excel(
+                    writer, sheet_name="Raw Log", index=False
+                )
+            self.view.log_message(f"[INFO] Throughput log saved: {filepath}")
+        except Exception as e:
+            self.view.log_message(f"[ERROR] Throughput log save failed: {e}")
+            messagebox.showerror("Error", f"저장 실패:\n{e}")
 
     def _parse_test_all_response(self, response_str):
         """test_all 명령어의 응답 문자열을 파싱하여 딕셔너리로 반환합니다."""

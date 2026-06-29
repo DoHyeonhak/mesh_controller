@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+from datetime import datetime
 from serial_controller import SerialController
 from app_model import AppModel
 from app_controller import AppController
@@ -14,8 +15,8 @@ class App:
         self.model = model
         self.controller = None  # Controller는 나중에 설정
 
-        self.root.title("LED & Group Control with Logging")
-        self.root.geometry("970x1050")
+        self.root.title("Mesh GW Controller")
+        self.root.geometry("1300x850")
 
         self._create_widgets()
         self._populate_initial_data()
@@ -27,8 +28,10 @@ class App:
 
     def log_message(self, message):
         """로그 창에 메시지를 표시합니다."""
-        self.log_text.insert(tk.END, message + "\n")
+        ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        self.log_text.insert(tk.END, f"[{ts}] {message}\n")
         self.log_text.see(tk.END)
+        self.model.add_tp_raw_log(ts, message)
 
     # UI Creation & Update Methods
     def _create_widgets(self):
@@ -77,7 +80,11 @@ class App:
         test_frame.grid(row=2, column=0, columnspan=3,
                         sticky="ew", padx=5, pady=5)
 
-        bottom_frame.grid(row=3, column=0, columnspan=3,
+        throughput_frame = ttk.LabelFrame(scrollable_frame, text="Throughput Test")
+        throughput_frame.grid(row=3, column=0, columnspan=3,
+                              sticky="ew", padx=5, pady=5)
+
+        bottom_frame.grid(row=4, column=0, columnspan=3,
                           sticky="nsew", padx=5, pady=5)
         bottom_frame.grid_columnconfigure(0, weight=3)
         bottom_frame.grid_columnconfigure(1, weight=1)
@@ -87,7 +94,7 @@ class App:
         stats_frame.grid(row=0, column=1, sticky="nsew", padx=(2, 0))
 
         scrollable_frame.grid_rowconfigure(1, weight=1)
-        scrollable_frame.grid_rowconfigure(3, weight=2)
+        scrollable_frame.grid_rowconfigure(4, weight=2)
         scrollable_frame.grid_columnconfigure(0, weight=1)
         scrollable_frame.grid_columnconfigure(1, weight=1)
         scrollable_frame.grid_columnconfigure(2, weight=1)
@@ -175,62 +182,44 @@ class App:
             loop_control_frame, text="LED/LEDs Loop")
         led_loop_frame.pack(fill="x", padx=5, pady=5)
 
-        loop_config_frame = ttk.Frame(led_loop_frame)
-        loop_config_frame.pack(fill='x', expand=True, padx=2, pady=2)
-        ttk.Label(loop_config_frame, text="Interval (s):").pack(
-            side="left", padx=(5, 0))
-        self.interval_entry = ttk.Entry(loop_config_frame, width=5)
-        self.interval_entry.pack(side="left", padx=5)
+        led_loop_row = ttk.Frame(led_loop_frame)
+        led_loop_row.pack(fill='x', padx=2, pady=4)
+        ttk.Label(led_loop_row, text="Interval (s):").pack(side="left", padx=(5, 0))
+        self.interval_entry = ttk.Entry(led_loop_row, width=5)
+        self.interval_entry.pack(side="left", padx=4)
         self.interval_entry.insert(0, "1")
-
-        ttk.Label(loop_config_frame, text="Length:").pack(
-            side="left", padx=(5, 0))
-        self.loop_length_entry = ttk.Entry(loop_config_frame, width=5)
-        self.loop_length_entry.pack(side="left", padx=5)
+        ttk.Label(led_loop_row, text="Length:").pack(side="left", padx=(5, 0))
+        self.loop_length_entry = ttk.Entry(led_loop_row, width=5)
+        self.loop_length_entry.pack(side="left", padx=4)
         self.loop_length_entry.insert(0, "-1")
-
-        loop_buttons_frame = ttk.Frame(led_loop_frame)
-        loop_buttons_frame.pack(fill='x', expand=True, padx=2, pady=2)
-        self.start_loop_button = ttk.Button(
-            loop_buttons_frame, text="Start LED/LEDs Loop")
-        self.start_loop_button.pack(
-            side="left", fill="x", expand=True, padx=2)
-
-        self.stop_loop_button = ttk.Button(led_loop_frame, text="Stop Loop")
-        self.stop_loop_button.pack(fill="x", expand=True, padx=2, pady=2)
+        self.start_loop_button = ttk.Button(led_loop_row, text="Start")
+        self.start_loop_button.pack(side="left", fill="x", expand=True, padx=(8, 2))
+        self.stop_loop_button = ttk.Button(led_loop_row, text="Stop")
+        self.stop_loop_button.pack(side="left", fill="x", expand=True, padx=2)
 
         test_loop_frame = ttk.LabelFrame(loop_control_frame, text="Test Loop")
         test_loop_frame.pack(fill="x", padx=5, pady=5)
 
-        test_loop_inputs_frame = ttk.Frame(test_loop_frame)
-        test_loop_inputs_frame.pack(fill="x", pady=(0, 5))
-        ttk.Label(test_loop_inputs_frame, text="Test Interval (s):").pack(
-            side="left", padx=5)
-        self.test_interval_entry = ttk.Entry(test_loop_inputs_frame, width=10)
-        self.test_interval_entry.pack(side="left", padx=5)
+        test_loop_row1 = ttk.Frame(test_loop_frame)
+        test_loop_row1.pack(fill="x", padx=2, pady=(4, 2))
+        ttk.Label(test_loop_row1, text="Interval (s):").pack(side="left", padx=(5, 0))
+        self.test_interval_entry = ttk.Entry(test_loop_row1, width=6)
+        self.test_interval_entry.pack(side="left", padx=4)
         self.test_interval_entry.insert(0, "1")
-        ttk.Label(test_loop_inputs_frame, text="Delay (ms):").pack(
-            side="left", padx=5)
-        self.test_all_ms_entry_loop = ttk.Entry(
-            test_loop_inputs_frame, width=10)
-        self.test_all_ms_entry_loop.pack(side="left", padx=5)
+        ttk.Label(test_loop_row1, text="Delay (ms):").pack(side="left", padx=(5, 0))
+        self.test_all_ms_entry_loop = ttk.Entry(test_loop_row1, width=6)
+        self.test_all_ms_entry_loop.pack(side="left", padx=4)
         self.test_all_ms_entry_loop.insert(0, "1000")
 
-        start_buttons_frame = ttk.Frame(test_loop_frame)
-        start_buttons_frame.pack(fill="x", pady=(5, 0))
-        self.start_test_all_no_delay_loop_button = ttk.Button(
-            start_buttons_frame, text="Start Test Loop (no delay)")
-        self.start_test_all_no_delay_loop_button.pack(
-            side="left", padx=5, fill='x', expand=True)
+        test_loop_row2 = ttk.Frame(test_loop_frame)
+        test_loop_row2.pack(fill="x", padx=2, pady=(0, 4))
         self.start_test_all_with_delay_loop_button = ttk.Button(
-            start_buttons_frame, text="Start Test Loop (with delay)")
+            test_loop_row2, text="Start")
         self.start_test_all_with_delay_loop_button.pack(
-            side="left", padx=5, fill='x', expand=True)
-
-        self.stop_test_loop_button = ttk.Button(
-            test_loop_frame, text="Stop Test Loop")
+            side="left", padx=(5, 2), fill='x', expand=True)
+        self.stop_test_loop_button = ttk.Button(test_loop_row2, text="Stop")
         self.stop_test_loop_button.pack(
-            fill='x', expand=True, padx=5, pady=(5, 0))
+            side="left", padx=2, fill='x', expand=True)
 
         # --- Test Commands Frame ---
         test_frame.grid_columnconfigure(0, weight=2)
@@ -260,15 +249,10 @@ class App:
         self.test_rssi_button.grid(
             row=1, column=2, columnspan=2, sticky="ew", padx=5, pady=2)
 
-        # Row 2 for test_latency with ms entry
+        # Row 2 for test_latency
         test_latency_frame = ttk.Frame(node_test_frame)
         test_latency_frame.grid(
             row=2, column=0, columnspan=4, sticky='ew', pady=2)
-        ttk.Label(test_latency_frame, text="ms:").pack(
-            side="left", padx=(5, 0))
-        self.test_latency_ms_entry = ttk.Entry(test_latency_frame, width=10)
-        self.test_latency_ms_entry.pack(side="left", padx=5)
-        self.test_latency_ms_entry.insert(0, "1000")
         self.test_latency_button = ttk.Button(
             test_latency_frame, text="test_latency")
         self.test_latency_button.pack(
@@ -369,6 +353,47 @@ class App:
             set_node_channel_frame, text="set_node_channel")
         self.set_node_channel_button.pack(side="left", fill="x", expand=True)
 
+        # --- Throughput Test Frame Contents ---
+        tp_input_frame = ttk.Frame(throughput_frame)
+        tp_input_frame.pack(fill="x", padx=5, pady=5)
+
+        ttk.Label(tp_input_frame, text="Target Addr:").pack(side="left", padx=(5, 0))
+        self.tp_addr_entry = ttk.Entry(tp_input_frame, width=10)
+        self.tp_addr_entry.pack(side="left", padx=5)
+
+        ttk.Label(tp_input_frame, text="IFS (ms):").pack(side="left", padx=(10, 0))
+        self.tp_ifs_entry = ttk.Entry(tp_input_frame, width=8)
+        self.tp_ifs_entry.insert(0, "10")
+        self.tp_ifs_entry.pack(side="left", padx=5)
+
+        ttk.Label(tp_input_frame, text="Packet Size (Bytes):").pack(side="left", padx=(10, 0))
+        self.tp_size_entry = ttk.Entry(tp_input_frame, width=8)
+        self.tp_size_entry.insert(0, "10")
+        self.tp_size_entry.pack(side="left", padx=5)
+
+        ttk.Label(tp_input_frame, text="Packet Count:").pack(side="left", padx=(10, 0))
+        self.tp_count_entry = ttk.Entry(tp_input_frame, width=8)
+        self.tp_count_entry.insert(0, "100")
+        self.tp_count_entry.pack(side="left", padx=5)
+
+        self.tp_start_button = ttk.Button(tp_input_frame, text="Start Throughput Test")
+        self.tp_start_button.pack(side="left", padx=(10, 5))
+
+        tp_result_frame = ttk.Frame(throughput_frame)
+        tp_result_frame.pack(fill="x", padx=5, pady=(0, 5))
+
+        ttk.Label(tp_result_frame, text="Flow #:").pack(side="left", padx=(5, 0))
+        self.tp_flow_label = ttk.Label(tp_result_frame, text="-", font=("Helvetica", 10, "bold"))
+        self.tp_flow_label.pack(side="left", padx=(2, 15))
+
+        ttk.Label(tp_result_frame, text="Sent:").pack(side="left", padx=(5, 0))
+        self.tp_sent_label = ttk.Label(tp_result_frame, text="-", font=("Helvetica", 10, "bold"))
+        self.tp_sent_label.pack(side="left", padx=(2, 15))
+
+        ttk.Label(tp_result_frame, text="Status:").pack(side="left", padx=(5, 0))
+        self.tp_status_label = ttk.Label(tp_result_frame, text="Idle")
+        self.tp_status_label.pack(side="left", padx=(2, 5))
+
         # --- Real-time Statistics Frame ---
         self.stats_labels = {}
         stats_display_frame = ttk.Frame(stats_frame)
@@ -404,6 +429,28 @@ class App:
             self.stats_labels[f'{metric}_avg'].grid(
                 row=i, column=3, padx=5, pady=2, sticky='w')
 
+        # Throughput row
+        tp_row = len(metrics) + 1
+        ttk.Label(stats_display_frame, text="THROUGHPUT (bps)").grid(
+            row=tp_row, column=0, padx=5, pady=2, sticky='w')
+        self.stats_labels['tp_min'] = ttk.Label(stats_display_frame, text="N/A")
+        self.stats_labels['tp_min'].grid(row=tp_row, column=1, padx=5, pady=2, sticky='w')
+        self.stats_labels['tp_max'] = ttk.Label(stats_display_frame, text="N/A")
+        self.stats_labels['tp_max'].grid(row=tp_row, column=2, padx=5, pady=2, sticky='w')
+        self.stats_labels['tp_avg'] = ttk.Label(stats_display_frame, text="N/A")
+        self.stats_labels['tp_avg'].grid(row=tp_row, column=3, padx=5, pady=2, sticky='w')
+
+        # Lost row
+        lost_row = tp_row + 1
+        ttk.Label(stats_display_frame, text="LOST (pkts)").grid(
+            row=lost_row, column=0, padx=5, pady=2, sticky='w')
+        self.stats_labels['lost_min'] = ttk.Label(stats_display_frame, text="N/A")
+        self.stats_labels['lost_min'].grid(row=lost_row, column=1, padx=5, pady=2, sticky='w')
+        self.stats_labels['lost_max'] = ttk.Label(stats_display_frame, text="N/A")
+        self.stats_labels['lost_max'].grid(row=lost_row, column=2, padx=5, pady=2, sticky='w')
+        self.stats_labels['lost_avg'] = ttk.Label(stats_display_frame, text="N/A")
+        self.stats_labels['lost_avg'].grid(row=lost_row, column=3, padx=5, pady=2, sticky='w')
+
         # Counts Section (test_all)
         counts_frame = ttk.Frame(stats_frame)
         counts_frame.pack(fill='x', padx=5, pady=5)
@@ -419,6 +466,10 @@ class App:
             'Helvetica', 10, 'bold')).pack(side='left')
         self.stats_labels['failure'] = ttk.Label(counts_frame, text="0")
         self.stats_labels['failure'].pack(side='left', padx=(0, 10))
+        ttk.Label(counts_frame, text="Flow Count:", font=(
+            'Helvetica', 10, 'bold')).pack(side='left', padx=(10, 0))
+        self.stats_labels['tp_count'] = ttk.Label(counts_frame, text="0")
+        self.stats_labels['tp_count'].pack(side='left', padx=(0, 10))
 
         # --- Log & Capture Frame ---
         log_display_frame = ttk.Frame(log_frame)
@@ -443,6 +494,10 @@ class App:
             capture_control_frame, text="Save Test Log")
         self.save_test_button.pack(side="left", padx=5)
         self.save_test_button.state(['disabled'])
+        self.save_tp_button = ttk.Button(
+            capture_control_frame, text="Save Throughput Log")
+        self.save_tp_button.pack(side="left", padx=5)
+        self.save_tp_button.state(['disabled'])
         self.capture_status_label = ttk.Label(
             capture_control_frame, text="Capture OFF")
         self.capture_status_label.pack(side="left", padx=10)
@@ -455,8 +510,6 @@ class App:
         self.delete_node_button.config(command=self.controller.delete_node)
         self.add_to_group_button.config(
             command=self.controller.assign_group_membership)
-        self.load_txt_button.config(
-            command=self.controller.load_txt_and_set_groups)
         self.load_txt_button.config(
             command=self.controller.load_txt_and_set_groups)
         self.led_on_button.config(
@@ -497,11 +550,12 @@ class App:
         self.set_node_channel_button.config(
             command=self.controller.run_set_node_channel)
 
+        self.tp_start_button.config(command=self.controller.run_throughput_test)
+
         self.capture_button.config(command=self.controller.toggle_capture)
         self.save_led_button.config(command=self.controller.save_led_data)
         self.save_test_button.config(command=self.controller.save_test_data)
-        self.start_test_all_no_delay_loop_button.config(
-            command=self.controller.start_test_all_no_delay_loop)
+        self.save_tp_button.config(command=self.controller.save_tp_data)
         self.start_test_all_with_delay_loop_button.config(
             command=self.controller.start_test_all_with_delay_loop)
         self.stop_test_loop_button.config(
@@ -513,6 +567,8 @@ class App:
         for group in self.model.groups:
             self.group_listbox.insert(tk.END, str(group))
         self.update_statistics_display()
+        self.set_led_loop_buttons(running=False)
+        self.set_test_loop_buttons(running=False)
 
     def update_node_listbox(self):
         """모델의 노드 목록을 기반으로 UI를 업데이트합니다."""
@@ -540,6 +596,7 @@ class App:
             self.update_capture_status("Capturing... (0 records)")
             self.save_led_button.state(['disabled'])
             self.save_test_button.state(['disabled'])
+            self.save_tp_button.state(['disabled'])
         else:
             self.capture_button.config(text="Start Capture")
             total_records = len(self.model.captured_led_res) + \
@@ -550,7 +607,30 @@ class App:
                 self.save_led_button.state(['!disabled'])
             if self.model.captured_test_res:
                 self.save_test_button.state(['!disabled'])
+            if self.model.captured_tp_res:
+                self.save_tp_button.state(['!disabled'])
         self.update_statistics_display()
+
+    def set_led_loop_buttons(self, running: bool):
+        if running:
+            self.start_loop_button.state(['disabled'])
+            self.stop_loop_button.state(['!disabled'])
+        else:
+            self.start_loop_button.state(['!disabled'])
+            self.stop_loop_button.state(['disabled'])
+
+    def set_test_loop_buttons(self, running: bool):
+        if running:
+            self.start_test_all_with_delay_loop_button.state(['disabled'])
+            self.stop_test_loop_button.state(['!disabled'])
+        else:
+            self.start_test_all_with_delay_loop_button.state(['!disabled'])
+            self.stop_test_loop_button.state(['disabled'])
+
+    def update_throughput_status(self, flow, sent, status):
+        self.tp_flow_label.config(text=str(flow))
+        self.tp_sent_label.config(text=str(sent))
+        self.tp_status_label.config(text=status)
 
     def update_statistics_display(self):
         """모델의 통계 데이터로 UI를 업데이트합니다."""
@@ -574,6 +654,25 @@ class App:
         self.stats_labels['total'].config(text=str(counts['total']))
         self.stats_labels['success'].config(text=str(counts['success']))
         self.stats_labels['failure'].config(text=str(counts['failure']))
+
+        tp = self.model.tp_stats
+        self.stats_labels['tp_count'].config(text=str(tp['count']))
+        if tp['count'] > 0:
+            tp_avg = tp['sum'] / tp['count']
+            lost_avg = tp['lost_sum'] / tp['count']
+            self.stats_labels['tp_min'].config(text=f"{tp['min']:.2f}")
+            self.stats_labels['tp_max'].config(text=f"{tp['max']:.2f}")
+            self.stats_labels['tp_avg'].config(text=f"{tp_avg:.2f}")
+            self.stats_labels['lost_min'].config(text=str(tp['lost_min']))
+            self.stats_labels['lost_max'].config(text=str(tp['lost_max']))
+            self.stats_labels['lost_avg'].config(text=f"{lost_avg:.2f}")
+        else:
+            self.stats_labels['tp_min'].config(text="N/A")
+            self.stats_labels['tp_max'].config(text="N/A")
+            self.stats_labels['tp_avg'].config(text="N/A")
+            self.stats_labels['lost_min'].config(text="N/A")
+            self.stats_labels['lost_max'].config(text="N/A")
+            self.stats_labels['lost_avg'].config(text="N/A")
 
 
 if __name__ == "__main__":

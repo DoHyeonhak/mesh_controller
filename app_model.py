@@ -19,6 +19,12 @@ class AppModel:
         self.test_statistics = self._init_stats()
         self.command_counts = self._init_counts()
 
+        self.throughput_flow_number = 0
+
+        self.captured_tp_res = []
+        self.captured_tp_raw_log = []
+        self.tp_stats = self._init_tp_stats()
+
     def _init_stats(self):
         """통계 데이터 구조를 초기화합니다."""
         return {
@@ -62,8 +68,11 @@ class AppModel:
         """캡처된 모든 데이터를 초기화합니다."""
         self.captured_led_res.clear()
         self.captured_test_res.clear()
+        self.captured_tp_res.clear()
+        self.captured_tp_raw_log.clear()
         self.test_statistics = self._init_stats()
         self.command_counts = self._init_counts()
+        self.tp_stats = self._init_tp_stats()
 
     def add_led_capture(self, data):
         """캡처된 LED 응답을 추가합니다."""
@@ -122,3 +131,42 @@ class AppModel:
         """LED 루프 상태를 토글합니다."""
         self.loop_state = not self.loop_state
         return self.loop_state
+
+    def next_throughput_flow(self):
+        """Throughput 측정 시작 시 호출. flow number를 증가시키고 반환."""
+        self.throughput_flow_number += 1
+        return self.throughput_flow_number
+
+    def _init_tp_stats(self):
+        return {
+            'min': None, 'max': None, 'sum': 0.0, 'count': 0,
+            'lost_min': None, 'lost_max': None, 'lost_sum': 0,
+        }
+
+    def add_tp_raw_log(self, ts, message):
+        if self.is_capturing:
+            self.captured_tp_raw_log.append({"timestamp": ts, "message": message})
+
+    def add_tp_capture(self, flow, throughput_bps, lost):
+        if not self.is_capturing:
+            return
+        from datetime import datetime
+        self.captured_tp_res.append({
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+            'flow': flow,
+            'throughput_bps': round(throughput_bps, 2),
+            'throughput_kbps': round(throughput_bps / 1000, 4),
+            'lost_packets': lost,
+        })
+        s = self.tp_stats
+        s['count'] += 1
+        s['sum'] += throughput_bps
+        s['lost_sum'] += lost
+        if s['min'] is None or throughput_bps < s['min']:
+            s['min'] = throughput_bps
+        if s['max'] is None or throughput_bps > s['max']:
+            s['max'] = throughput_bps
+        if s['lost_min'] is None or lost < s['lost_min']:
+            s['lost_min'] = lost
+        if s['lost_max'] is None or lost > s['lost_max']:
+            s['lost_max'] = lost

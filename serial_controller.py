@@ -16,6 +16,9 @@ class SerialController:
         self._start_time = 0
         self._last_command = ""
 
+        self._unsolicited_callback = None
+        self._unsolicited_buffer = ""
+
     def log(self, message):
         if self.log_callback:
             self.log_callback(message)
@@ -46,6 +49,29 @@ class SerialController:
 
     def is_waiting_response(self):
         return self._waiting_response
+
+    def start_unsolicited_reader(self, callback):
+        """Starts a background poller that captures lines arriving outside request-response cycles."""
+        self._unsolicited_callback = callback
+        self._unsolicited_buffer = ""
+        self.root.after(100, self._poll_unsolicited)
+
+    def _poll_unsolicited(self):
+        if not self.is_connected():
+            self._unsolicited_buffer = ""
+            return
+        if not self._waiting_response and self.ser.in_waiting > 0:
+            try:
+                chunk = self.ser.read(self.ser.in_waiting).decode(errors="ignore")
+                self._unsolicited_buffer += chunk
+                while "\n" in self._unsolicited_buffer:
+                    line, self._unsolicited_buffer = self._unsolicited_buffer.split("\n", 1)
+                    line = line.strip()
+                    if line and self._unsolicited_callback:
+                        self._unsolicited_callback(line)
+            except Exception:
+                pass
+        self.root.after(100, self._poll_unsolicited)
 
     def send_command(self, command):
         if not self.is_connected():
@@ -109,7 +135,6 @@ class SerialController:
             
             if final_response:
                 self.log(final_response)
-            self.log(f"[응답 시간: {elapsed:.3f}초]")
 
             # <<< START: 로직 수정 (2/2) --- 'is_success' 판단 로직 강화 >>>
             lower_response = final_response.lower()
@@ -137,10 +162,11 @@ class SerialController:
                 "raw_response": raw_response,
             }
 
+            self._waiting_response = False
+
             if self.data_callback:
                 self.data_callback(data_to_log)
 
-            self._waiting_response = False
             return
 
         self.root.after(10, self._check_response)
