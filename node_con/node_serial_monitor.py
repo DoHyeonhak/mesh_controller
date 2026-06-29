@@ -22,7 +22,7 @@ def parse_send_data(line):
     if len(args) < 3:
         return None
     src, flow, seq = args[0], args[1], args[2]
-    packet_size = len(args) - 1  # src 제외한 데이터 바이트 수
+    packet_size = len(args) - 1 + 2  # payload bytes + 2-byte src address
     return src, flow, seq, packet_size
 
 
