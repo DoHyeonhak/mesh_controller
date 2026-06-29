@@ -2,6 +2,7 @@ import serial
 import serial.tools.list_ports
 import time
 
+
 class SerialController:
 
     def __init__(self, root, log_callback=None, data_callback=None):
@@ -14,6 +15,7 @@ class SerialController:
         self._response_data = ""
         self._start_time = 0
         self._last_command = ""
+        self._last_rx_time = 0
 
         self._unsolicited_callback = None
         self._unsolicited_buffer = ""
@@ -61,10 +63,12 @@ class SerialController:
             return
         if not self._waiting_response and self.ser.in_waiting > 0:
             try:
-                chunk = self.ser.read(self.ser.in_waiting).decode(errors="ignore")
+                chunk = self.ser.read(
+                    self.ser.in_waiting).decode(errors="ignore")
                 self._unsolicited_buffer += chunk
                 while "\n" in self._unsolicited_buffer:
-                    line, self._unsolicited_buffer = self._unsolicited_buffer.split("\n", 1)
+                    line, self._unsolicited_buffer = self._unsolicited_buffer.split(
+                        "\n", 1)
                     line = line.strip()
                     if line and self._unsolicited_callback:
                         self._unsolicited_callback(line)
@@ -84,6 +88,7 @@ class SerialController:
         self._last_command = command
         self._waiting_response = True
         self._start_time = time.time()
+        self._last_rx_time = 0
         self._response_data = ""
 
         try:
@@ -95,63 +100,83 @@ class SerialController:
             self._waiting_response = False
 
     def _check_response(self):
-        # Collects data until '>' prompt is received. No timeout — waits indefinitely.
         if not self._waiting_response:
             return
 
         if self.ser.in_waiting > 0:
             try:
-                chunk = self.ser.read(self.ser.in_waiting).decode(errors="ignore")
+                chunk = self.ser.read(
+                    self.ser.in_waiting).decode(errors="ignore")
                 self._response_data += chunk
+                self._last_rx_time = time.time()
             except Exception as e:
                 self.log(f"[ERROR] 데이터 수신 중 오류: {e}")
                 self._waiting_response = False
                 return
 
-        is_response_complete = "\n>" in self._response_data or self._response_data.endswith('>')
-
-        if is_response_complete:
-            response_time = time.time()
-            elapsed = response_time - self._start_time
-
-            raw_response = self._response_data.strip()
-            lines = raw_response.splitlines()
-
-            filtered_lines = [
-                line.strip() for line in lines
-                if line.strip() and
-                   line.strip() != self._last_command.strip() and
-                   line.strip() != '>'
-            ]
-
-            final_response = "\n".join(filtered_lines)
-
-            if final_response:
-                self.log(final_response)
-
-            lower_response = final_response.lower()
-            is_success = not (
-                "fail" in lower_response or
-                "error" in lower_response or
-                "no response" in lower_response or
-                not final_response
-            )
-
-            data_to_log = {
-                "command": self._last_command,
-                "request_time": self._start_time,
-                "response_time": response_time,
-                "response_gap_ms": elapsed * 1000,
-                "success": is_success,
-                "filtered_response": final_response,
-                "raw_response": raw_response,
-            }
-
-            self._waiting_response = False
-
-            if self.data_callback:
-                self.data_callback(data_to_log)
-
+        has_prompt = "\n>" in self._response_data or self._response_data.endswith(
+            '>')
+        if not has_prompt:
+            self.root.after(10, self._check_response)
             return
 
-        self.root.after(10, self._check_response)
+        raw_response = self._response_data.strip()
+        lines = raw_response.splitlines()
+        filtered_lines = [
+            line.strip() for line in lines
+            if line.strip() and
+            line.strip() != self._last_command.strip() and
+            line.strip() != '>'
+        ]
+
+        # test_all / test_latency 등은 실행 전에 중간 '>' 줄을 먼저 보낸다.
+        # 이 명령들은 결과가 도착하고 최종 '>'가 확인될 때만 완료 처리한다.
+        uses_intermediate_prompt = self._last_command.startswith(
+            ('test_all', 'test_latency', 'test_rtt', 'test_hop', 'test_rssi')
+        )
+
+        if uses_intermediate_prompt:
+            ends_with_prompt = self._response_data.rstrip().endswith('>')
+            silence_ms = (time.time() - self._last_rx_time) * \
+                1000 if self._last_rx_time else 0
+            if not filtered_lines:
+                # 중간 프롬프트만 수신, 결과 대기
+                self.root.after(10, self._check_response)
+                return
+            if not ends_with_prompt and silence_ms < 300:
+                # 결과 일부 도착했으나 최종 '>' 미수신, 계속 대기
+                self.root.after(10, self._check_response)
+                return
+            # filtered_lines 있고 (최종 '>' 또는 300ms 침묵) → 완료
+
+        response_time = time.time()
+        elapsed = response_time - self._start_time
+
+        final_response = "\n".join(filtered_lines)
+
+        if final_response:
+            self.log(final_response)
+        # self.log(f"[응답 시간: {elapsed:.3f}초]")
+
+        lower_response = final_response.lower()
+        is_success = not (
+            "fail" in lower_response or
+            "error" in lower_response or
+            "no response" in lower_response or
+            not final_response
+        )
+
+        data_to_log = {
+            "command": self._last_command,
+            "request_time": self._start_time,
+            "response_time": response_time,
+            "response_gap_ms": elapsed * 1000,
+            "success": is_success,
+            "filtered_response": final_response,
+            "raw_response": raw_response,
+        }
+
+        self._waiting_response = False
+
+        if self.data_callback:
+            self.data_callback(data_to_log)

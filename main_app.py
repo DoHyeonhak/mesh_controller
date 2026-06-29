@@ -24,9 +24,9 @@ class App:
         self._bind_commands()
 
     def log_message(self, message):
-        ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        self.log_text.insert(tk.END, f"[{ts}] {message}\n")
+        self.log_text.insert(tk.END, f"{message}\n")
         self.log_text.see(tk.END)
+        ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         self.model.add_tp_raw_log(ts, message)
 
     def _create_widgets(self):

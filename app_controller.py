@@ -4,6 +4,7 @@ from datetime import datetime
 import pandas as pd
 import re
 import time
+import random
 
 _UPLINK_DATA_PATTERN = re.compile(r"uplink_data\((\d+(?:,\s*\d+)*)\)")
 
@@ -600,7 +601,7 @@ class AppController:
     def _send_next_tp_packet(self):
         seq = self._tp_sent
         padding_count = self._tp_packet_size - 2  # flow(1B) + seq(1B)
-        payload = [self._tp_flow, seq] + [0] * padding_count
+        payload = [self._tp_flow, seq] + [random.randint(0, 255) for _ in range(padding_count)]
         payload_str = ",".join(str(b) for b in payload)
         cmd = f"send_data_noack({self._tp_addr},{self._tp_ifs},{payload_str})"
         self.serial.send_command(cmd)
