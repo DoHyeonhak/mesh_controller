@@ -3,13 +3,12 @@ import serial.tools.list_ports
 import time
 
 class SerialController:
-    """시리얼 통신과 관련된 모든 책임을 담당하는 클래스"""
 
-    def __init__(self, root, log_callback=None, data_callback=None): # data_callback 추가
+    def __init__(self, root, log_callback=None, data_callback=None):
         self.ser = None
         self.root = root
         self.log_callback = log_callback
-        self.data_callback = data_callback # data_callback 저장
+        self.data_callback = data_callback
 
         self._waiting_response = False
         self._response_data = ""
@@ -51,7 +50,7 @@ class SerialController:
         return self._waiting_response
 
     def start_unsolicited_reader(self, callback):
-        """Starts a background poller that captures lines arriving outside request-response cycles."""
+        """Captures lines arriving outside request-response cycles."""
         self._unsolicited_callback = callback
         self._unsolicited_buffer = ""
         self.root.after(100, self._poll_unsolicited)
@@ -94,12 +93,9 @@ class SerialController:
         except Exception as e:
             self.log(f"[ERROR] 명령어 전송 실패: {e}")
             self._waiting_response = False
-            
+
     def _check_response(self):
-        """
-        프롬프트 문자('>')가 수신될 때까지 응답을 수집합니다.
-        타임아웃 없이 장치의 응답을 끝까지 기다립니다.
-        """
+        # Collects data until '>' prompt is received. No timeout — waits indefinitely.
         if not self._waiting_response:
             return
 
@@ -117,47 +113,36 @@ class SerialController:
         if is_response_complete:
             response_time = time.time()
             elapsed = response_time - self._start_time
-            
+
             raw_response = self._response_data.strip()
             lines = raw_response.splitlines()
-            
+
             filtered_lines = [
-                line.strip() for line in lines 
-                if line.strip() and \
-                   line.strip() != self._last_command.strip() and \
+                line.strip() for line in lines
+                if line.strip() and
+                   line.strip() != self._last_command.strip() and
                    line.strip() != '>'
             ]
 
-            # <<< START: 로직 수정 (1/2) --- 'no response' 메시지 변환 제거 >>>
-            # 기존에는 'no response'를 다른 문자열로 바꿨으나, 이제는 원본을 그대로 사용합니다.
             final_response = "\n".join(filtered_lines)
-            # <<< END: 로직 수정 (1/2) >>>
-            
+
             if final_response:
                 self.log(final_response)
 
-            # <<< START: 로직 수정 (2/2) --- 'is_success' 판단 로직 강화 >>>
             lower_response = final_response.lower()
-            is_success = True  # 기본값을 True로 설정하고, 실패 조건에 해당하면 False로 변경
-
-            # 실패 조건들:
-            # 1. 응답에 'fail'이 포함된 경우 (예: 'led_fail')
-            # 2. 응답에 'error'가 포함된 경우
-            # 3. 응답에 'no response'가 포함된 경우
-            # 4. 필터링된 응답이 아예 없는 경우 (프롬프트만 받은 경우)
-            if "fail" in lower_response or \
-               "error" in lower_response or \
-               "no response" in lower_response or \
-               not final_response:
-                is_success = False
-            # <<< END: 로직 수정 (2/2) >>>
+            is_success = not (
+                "fail" in lower_response or
+                "error" in lower_response or
+                "no response" in lower_response or
+                not final_response
+            )
 
             data_to_log = {
                 "command": self._last_command,
                 "request_time": self._start_time,
                 "response_time": response_time,
                 "response_gap_ms": elapsed * 1000,
-                "success": is_success, # 강화된 로직의 결과가 저장됨
+                "success": is_success,
                 "filtered_response": final_response,
                 "raw_response": raw_response,
             }

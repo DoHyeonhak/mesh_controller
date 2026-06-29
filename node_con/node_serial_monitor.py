@@ -9,12 +9,11 @@ from datetime import datetime
 import pandas as pd
 
 
-# send_data(src, flow, seq, byte3, ...) 파싱
 SEND_DATA_PATTERN = re.compile(r"send_data\((\d+(?:,\s*\d+)*)\)")
 
 
 def parse_send_data(line):
-    """send_data(...) 줄을 파싱해 (src, flow, seq, packet_size) 반환. 실패 시 None."""
+    """Parse send_data(...) → (src, flow, seq, packet_size). Returns None on failure."""
     m = SEND_DATA_PATTERN.search(line.strip())
     if not m:
         return None
@@ -27,13 +26,12 @@ def parse_send_data(line):
 
 
 class ThroughputSession:
-    """하나의 Flow에 대한 수신 세션을 추적한다.
+    """Tracks received packets for one flow and computes throughput.
 
-    PDF 공식:
-        d_rx = d_end - d_start
-        Tput  = (received_count × packet_size × 8) / d_rx  (bps)
-        lost  = inferred_total - received
-            inferred_total = max(seq) + 1  (seq가 0-indexed이므로)
+    Formula (from spec):
+        d_rx  = d_end - d_start
+        Tput  = (received × packet_size × 8) / d_rx  (bps)
+        lost  = (max(seq) + 1) - received
     """
 
     def __init__(self, flow, packet_size):
@@ -52,9 +50,9 @@ class ThroughputSession:
         self.received_seqs.add(seq)
 
     def compute(self):
-        """(throughput_bps, lost_count, received, inferred_total) 반환.
-        단일 패킷 수신이면 (None, lost, 1, inferred_total) 반환.
-        데이터 없으면 None 반환.
+        """Returns (throughput_bps, lost, received, inferred_total).
+        throughput_bps is None if only one packet was received (d_rx == 0).
+        Returns None if no packets recorded.
         """
         if self.d_start is None or self.d_end is None:
             return None
@@ -63,7 +61,6 @@ class ThroughputSession:
         lost = max(inferred_total - received, 0)
         drx = self.d_end - self.d_start
         if drx <= 0:
-            # 단일 패킷 수신 — throughput 계산 불가
             return None, lost, received, inferred_total
         total_bits = received * self.packet_size * 8
         throughput_bps = total_bits / drx
@@ -71,7 +68,6 @@ class ThroughputSession:
 
 
 class NodeSerialMonitor:
-    """Target Node 시리얼 포트를 모니터링하고 Throughput을 계산하는 클래스."""
 
     SILENCE_TIMEOUT_MS = 500
 
@@ -89,7 +85,6 @@ class NodeSerialMonitor:
 
         self.target_flow = None
 
-        # Stop-and-Wait state for uplink_data result delivery
         self._uplink_state = 'IDLE'   # 'IDLE' | 'WAITING_ACK'
         self._uplink_flow = None
         self._uplink_cmd = ""
@@ -178,9 +173,9 @@ class NodeSerialMonitor:
 
         src, flow, seq, packet_size = parsed
 
-        # ACK detection: flow=0 is reserved for GW ACK packets
-        # GW sends send_data_noack(node_addr, 0, 0, acked_flow)
-        # → Target Node outputs send_data(gw_src, 0, acked_flow, ...)
+        # flow=0 is reserved for GW ACK packets.
+        # GW sends: send_data_noack(node_addr, 0, 0, acked_flow)
+        # Node sees: send_data(gw_src, 0, acked_flow, ...)
         if flow == 0:
             if self._uplink_state == 'WAITING_ACK' and seq == self._uplink_flow:
                 self._on_uplink_ack_received()
@@ -191,9 +186,9 @@ class NodeSerialMonitor:
 
         if self._session is None:
             self._session = ThroughputSession(flow, packet_size)
-            self.target_flow = flow  # 첫 패킷의 flow로 고정, 다른 flow 무시
+            self.target_flow = flow  # lock onto first flow; ignore others
         elif self._session.flow != flow:
-            return  # 진행 중인 세션과 다른 flow → 무시
+            return
 
         self._session.record_packet(seq)
 
@@ -204,7 +199,6 @@ class NodeSerialMonitor:
         )
 
     def _on_silence_timeout(self):
-        """마지막 패킷 이후 500ms 침묵 → 세션 종료 및 결과 계산."""
         self._silence_check_id = None
         if self._session is None:
             return
@@ -239,7 +233,7 @@ class NodeSerialMonitor:
         self.target_flow = None
 
     def _send_uplink_result(self, flow, throughput_bps, lost):
-        """Start Stop-and-Wait delivery of throughput result via uplink_data().
+        """Send throughput result to GW via uplink_data() using Stop-and-Wait.
 
         Throughput is scaled ×100 (unit: 0.01 bps) to preserve 2 decimal places.
         GW decodes by dividing by 100. Supports up to ~42.9 Mbps.
@@ -261,7 +255,7 @@ class NodeSerialMonitor:
         self._do_send_uplink()
 
     def _do_send_uplink(self):
-        """Send (or retransmit) the uplink_data command and start ACK timer."""
+        """Transmit (or retransmit) uplink_data and arm ACK timer."""
         try:
             self.ser.write((self._uplink_cmd + '\r\n').encode())
             self.log_callback(
@@ -278,7 +272,6 @@ class NodeSerialMonitor:
         )
 
     def _on_uplink_ack_received(self):
-        """Called when GW ACK is detected (flow=0, seq=uplink_flow)."""
         if self._uplink_ack_timer_id:
             self.root.after_cancel(self._uplink_ack_timer_id)
             self._uplink_ack_timer_id = None
@@ -287,7 +280,6 @@ class NodeSerialMonitor:
         self._uplink_flow = None
 
     def _on_uplink_ack_timeout(self):
-        """Called when ACK timeout fires — retransmit or give up."""
         self._uplink_ack_timer_id = None
         if self._uplink_state != 'WAITING_ACK':
             return
@@ -317,14 +309,13 @@ class App:
         )
 
         self._is_capturing = False
-        self._captured_results = []   # [{flow, throughput_bps, lost, timestamp}, ...]
-        self._captured_raw_log = []   # [{timestamp, message}, ...]
+        self._captured_results = []
+        self._captured_raw_log = []
         self.stats_labels = {}
 
         self._build_ui()
 
     def _build_ui(self):
-        # --- 연결 섹션 ---
         conn_frame = ttk.LabelFrame(self.root, text="Connection")
         conn_frame.pack(fill="x", padx=10, pady=5)
 
@@ -346,7 +337,6 @@ class App:
         self.conn_status = ttk.Label(conn_frame, text="Not connected", foreground="red")
         self.conn_status.grid(row=0, column=6, padx=10, pady=5)
 
-        # --- 캡처 섹션 ---
         capture_frame = ttk.LabelFrame(self.root, text="Capture")
         capture_frame.pack(fill="x", padx=10, pady=5)
 
@@ -359,7 +349,6 @@ class App:
         self.capture_status_lbl = ttk.Label(capture_frame, text="Capture OFF")
         self.capture_status_lbl.pack(side="left", padx=10, pady=5)
 
-        # --- Statistics 섹션 ---
         stats_frame = ttk.LabelFrame(self.root, text="Statistics")
         stats_frame.pack(fill="x", padx=10, pady=5)
 
@@ -393,7 +382,6 @@ class App:
         self.stats_labels["tp_count"] = ttk.Label(counts_frame, text="0")
         self.stats_labels["tp_count"].pack(side="left", padx=(4, 0))
 
-        # --- 로그 섹션 ---
         log_frame = ttk.LabelFrame(self.root, text="Receive Log")
         log_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
@@ -403,7 +391,6 @@ class App:
         self.log_text.pack(side="left", fill="both", expand=True, padx=5, pady=5)
         sb.pack(side="right", fill="y")
 
-        # --- 하단 버튼 ---
         btn_frame = ttk.Frame(self.root)
         btn_frame.pack(fill="x", padx=10, pady=5)
         ttk.Button(btn_frame, text="Clear Log", command=self._clear_log).pack(side="left", padx=5)

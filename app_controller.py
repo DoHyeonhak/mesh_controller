@@ -9,7 +9,6 @@ _UPLINK_DATA_PATTERN = re.compile(r"uplink_data\((\d+(?:,\s*\d+)*)\)")
 
 
 class AppController:
-    """애플리케이션의 비즈니스 로직과 사용자 입력을 처리하는 컨트롤러"""
 
     def __init__(self, model, serial, view):
         self.model = model
@@ -17,7 +16,6 @@ class AppController:
         self.view = view
         self.serial.data_callback = self.handle_serial_data
 
-        # Throughput 측정 상태
         self._tp_state = 'IDLE'   # 'IDLE' | 'SENDING'
         self._tp_addr = None
         self._tp_ifs = 0
@@ -26,12 +24,10 @@ class AppController:
         self._tp_sent = 0
         self._tp_flow = 0
 
-    # Callback & Core Logic Methods
     def handle_serial_data(self, data):
-        """SerialController로부터 구조화된 데이터를 받아 모델에 저장하는 콜백"""
         cmd = data.get("command", "")
 
-        # Throughput 전송 연속성은 캡처 상태와 무관하게 항상 처리
+        # Throughput packet chain must continue regardless of capture state
         if cmd.startswith("send_data_noack") and self._tp_state == 'SENDING':
             self._tp_sent += 1
             self.view.update_throughput_status(
@@ -137,26 +133,19 @@ class AppController:
             self.view.log_message(f"[INFO] 노드 {address} 삭제됨")
 
     def assign_group_membership(self):
-        """선택된 노드와 그룹의 수에 따라 그룹 멤버십을 할당합니다.
-        - 1개 노드, N개 그룹: 노드에 여러 그룹을 할당합니다. (function : add_node_to_groups 기능)
-        - N개 노드, 1개 그룹: 여러 노드를 하나의 그룹에 할당합니다.
-        """
         node_indices = self.view.node_listbox.curselection()
         group_indices = self.view.group_listbox.curselection()
         num_nodes = len(node_indices)
         num_groups = len(group_indices)
 
-        # 한 개의 노드를 여러 그룹에 할당
         if num_nodes == 1 and num_groups >= 1:
             node_addr = self.view.node_listbox.get(node_indices[0])
-            group_addrs = [self.view.group_listbox.get(
-                i) for i in group_indices]
+            group_addrs = [self.view.group_listbox.get(i) for i in group_indices]
             cmd = f"set_group({node_addr},{','.join(group_addrs)})"
             self.serial.send_command(cmd)
             self.view.log_message(
                 f"[INFO] 노드 {node_addr}에 {num_groups}개의 그룹을 할당했습니다.")
 
-        # 여러 개의 노드를 한 그룹에 할당
         elif num_nodes > 1 and num_groups == 1:
             node_addrs = [self.view.node_listbox.get(i) for i in node_indices]
             group_addr = self.view.group_listbox.get(group_indices[0])
@@ -168,7 +157,6 @@ class AppController:
                 cmd = f"set_group({node_addr},{group_addr})"
                 self.serial.send_command(cmd)
 
-                # waiting response (2 seconds)
                 wait_start_time = time.time()
                 while self.serial.is_waiting_response():
                     self.view.root.update()
@@ -178,7 +166,6 @@ class AppController:
                 else:
                     successful_nodes.append(node_addr)
 
-            # display the result
             if successful_nodes:
                 self.view.log_message(
                     f"[INFO] {len(successful_nodes)}개의 노드를 그룹 {group_addr}에 할당했습니다: {', '.join(successful_nodes)}")
@@ -214,8 +201,7 @@ class AppController:
                 if not line or ':' not in line:
                     continue
 
-                node_part, groups_part = [x.strip()
-                                          for x in line.split(':', 1)]
+                node_part, groups_part = [x.strip() for x in line.split(':', 1)]
                 groups_str = ",".join(
                     [g.strip() for g in groups_part.split(',') if g.strip().isdigit()])
 
@@ -223,7 +209,6 @@ class AppController:
                     cmd = f"set_group({node_part},{groups_str})"
                     self.serial.send_command(cmd)
 
-                    # 응답 대기 (2초 타임아웃)
                     wait_start_time = time.time()
                     while self.serial.is_waiting_response():
                         time.sleep(0.05)
@@ -231,10 +216,9 @@ class AppController:
                         if time.time() - wait_start_time > 2.0:
                             ignored_nodes.append(node_part)
                             break
-                    else:  # while 루프가 break 없이 정상적으로 종료된 경우
+                    else:  # while-else: runs only when loop exits without break
                         successful_nodes.append(node_part)
 
-            # 최종 결과 로깅
             if successful_nodes:
                 self.view.log_message(
                     f"[INFO] {len(successful_nodes)}개 노드의 그룹 설정 완료: {', '.join(successful_nodes)}")
@@ -390,7 +374,6 @@ class AppController:
             return
 
         self.serial.send_command(command)
-
         self.view.root.after(
             int(self.model.test_interval * 1000), self._test_loop)
 
@@ -481,7 +464,6 @@ class AppController:
 
     def run_set_gw_channel(self):
         try:
-            # TODO: Check for the valid range of channel number
             channel = int(self.view.gw_channel_entry.get().strip())
         except ValueError:
             messagebox.showerror("Error", "Channel 값은 숫자여야 합니다.")
@@ -498,7 +480,6 @@ class AppController:
         if not address:
             return
         try:
-            # TODO: Check for the valid range of channel number
             channel = int(self.view.node_channel_entry.get().strip())
         except ValueError:
             messagebox.showerror("Error", "Channel 값은 숫자여야 합니다.")
@@ -618,7 +599,7 @@ class AppController:
 
     def _send_next_tp_packet(self):
         seq = self._tp_sent
-        padding_count = self._tp_packet_size - 2  # flow(1) + seq(1) 제외
+        padding_count = self._tp_packet_size - 2  # flow(1B) + seq(1B)
         payload = [self._tp_flow, seq] + [0] * padding_count
         payload_str = ",".join(str(b) for b in payload)
         cmd = f"send_data_noack({self._tp_addr},{self._tp_ifs},{payload_str})"
@@ -635,7 +616,7 @@ class AppController:
             return
         src_addr = args[0]
         flow = args[1]
-        # Throughput was scaled ×100 on the node side (unit: 0.01 bps) → divide to restore
+        # Throughput scaled ×100 on node side (unit: 0.01 bps) → divide to restore
         tput_scaled = (args[2] << 24) | (args[3] << 16) | (args[4] << 8) | args[5]
         throughput_bps = tput_scaled / 100.0
         lost = (args[6] << 8) | args[7]
@@ -646,7 +627,7 @@ class AppController:
         self.model.add_tp_capture(flow, throughput_bps, lost)
         if self.model.is_capturing:
             self.view.update_statistics_display()
-        # Send ACK: payload [0, flow] → Node detects flow=0 as ACK marker, seq=flow as confirmation
+        # ACK: flow=0 is reserved; seq=flow tells node which session is confirmed
         self.serial.send_command(f"send_data_noack({src_addr},0,0,{flow})")
 
     def save_tp_data(self):
@@ -674,12 +655,10 @@ class AppController:
             messagebox.showerror("Error", f"저장 실패:\n{e}")
 
     def _parse_test_all_response(self, response_str):
-        """test_all 명령어의 응답 문자열을 파싱하여 딕셔너리로 반환합니다."""
         if "no response" in response_str.lower():
             return {'rtt': -1, 'latency': -1, 'down_hop': -1, 'up_hop': -1, 'rssi': -1}
 
-        results = {'rtt': -1, 'latency': -1,
-                   'down_hop': -1, 'up_hop': -1, 'rssi': -1}
+        results = {'rtt': -1, 'latency': -1, 'down_hop': -1, 'up_hop': -1, 'rssi': -1}
 
         rtt_match = re.search(r"rtt=([\d\.]+)", response_str)
         if rtt_match:
